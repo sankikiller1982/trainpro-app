@@ -62,10 +62,14 @@ function AppContent() {
       try {
         const db = await sheetsApi.fetchAll();
         
-        const loadedStudents = db.filter((r: any) => r.type === 'student').map((r: any) => r.data as Student);
-        const loadedExercises = db.filter((r: any) => r.type === 'exercise').map((r: any) => r.data as Exercise);
-        const loadedRoutines = db.filter((r: any) => r.type === 'saved_routine').map((r: any) => r.data as SavedRoutine);
-        const loadedAssignments = db.filter((r: any) => r.type === 'assignment').map((r: any) => r.data as RoutineAssignment);
+        const parseData = (r: any) => {
+          if (typeof r.data === 'string') { try { return JSON.parse(r.data); } catch { return null; } }
+          return r.data;
+        };
+        const loadedStudents = db.filter((r: any) => r.type === 'student').map(parseData).filter(Boolean) as Student[];
+        const loadedExercises = db.filter((r: any) => r.type === 'exercise').map(parseData).filter(Boolean) as Exercise[];
+        const loadedRoutines = db.filter((r: any) => r.type === 'saved_routine').map(parseData).filter(Boolean) as SavedRoutine[];
+        const loadedAssignments = db.filter((r: any) => r.type === 'assignment').map(parseData).filter(Boolean) as RoutineAssignment[];
 
         // Estudiantes
         if (loadedStudents.length > 0) {
