@@ -239,6 +239,31 @@ function AppContent() {
     }
   }, [addToast]);
 
+  const handleAddExerciseToExistingRoutine = useCallback((exercise: Exercise, routineId: string) => {
+    setSavedRoutines((prev) => {
+      const routine = prev.find((r) => r.id === routineId);
+      if (!routine) return prev;
+      const newEx = {
+        id: `re-${Date.now()}`,
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        targetMuscles: exercise.secondaryMuscles,
+        imageUrl: exercise.imageUrl,
+        gifUrl: exercise.gifUrl,
+        sets: exercise.defaultSets,
+        reps: exercise.defaultReps,
+      };
+      const updated: SavedRoutine = {
+        ...routine,
+        exercises: [...routine.exercises, newEx],
+        updatedAt: new Date().toISOString(),
+      };
+      sheetsApi.saveRecord(updated.id, 'saved_routine', updated).catch(console.error);
+      addToast(`"${exercise.name}" añadido a "${routine.name}"`, 'success');
+      return prev.map((r) => (r.id === routineId ? updated : r));
+    });
+  }, [addToast]);
+
   // Pantalla de Login si no hay entrenador
   if (!currentTrainer) {
     return <TrainerLogin onLogin={handleLogin} />;
@@ -290,9 +315,12 @@ function AppContent() {
         {activeTab === 'ejercicios' && (
           <EjerciciosView
             exercises={exercises}
+            savedRoutines={savedRoutines}
             onAddExerciseToRoutine={handleAddExerciseToRoutineFromCatalog}
+            onAddExerciseToRoutineById={handleAddExerciseToExistingRoutine}
             onAddCustomExercise={handleAddCustomExercise}
             onDeleteExercise={handleDeleteExercise}
+            onNavigateToCreador={() => setActiveTab('creador')}
           />
         )}
 

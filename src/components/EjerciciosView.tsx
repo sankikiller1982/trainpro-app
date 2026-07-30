@@ -1,19 +1,25 @@
 import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastContext';
-import { Exercise, MuscleCategory } from '../types';
+import { Exercise, MuscleCategory, SavedRoutine } from '../types';
 
 interface EjerciciosViewProps {
   exercises: Exercise[];
+  savedRoutines: SavedRoutine[];
   onAddExerciseToRoutine: (exercise: Exercise) => void;
+  onAddExerciseToRoutineById: (exercise: Exercise, routineId: string) => void;
   onAddCustomExercise: (exercise: Exercise) => void;
   onDeleteExercise: (exercise: Exercise) => void;
+  onNavigateToCreador: () => void;
 }
 
 export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
   exercises,
+  savedRoutines,
   onAddExerciseToRoutine,
+  onAddExerciseToRoutineById,
   onAddCustomExercise,
   onDeleteExercise,
+  onNavigateToCreador,
 }) => {
   const { addToast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<MuscleCategory>('Todos');
@@ -22,6 +28,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [hoveredExerciseId, setHoveredExerciseId] = useState<string | null>(null);
   const [confirmDeleteExercise, setConfirmDeleteExercise] = useState<Exercise | null>(null);
+  const [addToRoutineTarget, setAddToRoutineTarget] = useState<Exercise | null>(null);
 
   // Pagination state for performance with 1300+ items
   const [displayCount, setDisplayCount] = useState(36);
@@ -347,14 +354,73 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                   Cerrar
                 </button>
                 <button
-                  onClick={(e) => {
-                    handleQuickAdd(e, selectedExerciseModal);
-                    setSelectedExerciseModal(null);
+                  onClick={() => {
+                    setAddToRoutineTarget(selectedExerciseModal);
                   }}
                   className="flex-1 py-2.5 rounded-xl bg-[#d2f000] text-[#191e00] font-bold text-sm hover:opacity-90 flex items-center justify-center gap-1 shadow"
                 >
                   <span className="material-symbols-outlined text-base">add</span>
                   Añadir a Rutina
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add to Routine Modal */}
+      {addToRoutineTarget && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#122131] border border-[#454932] rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden shadow-2xl animate-scale-in flex flex-col">
+            <div className="p-4 border-b border-[#454932] flex items-center justify-between bg-[#051424] shrink-0">
+              <h3 className="font-headline text-base font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#d2f000]">playlist_add</span>
+                Añadir "{addToRoutineTarget.name}"
+              </h3>
+              <button onClick={() => setAddToRoutineTarget(null)} className="text-[#c6c9ab] hover:text-white p-1">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {savedRoutines.length === 0 ? (
+                <p className="text-sm text-[#c6c9ab] text-center py-6">Aún no hay rutinas guardadas.</p>
+              ) : (
+                <div className="space-y-2">
+                  {savedRoutines.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        onAddExerciseToRoutineById(addToRoutineTarget, r.id);
+                        setAddToRoutineTarget(null);
+                        setSelectedExerciseModal(null);
+                      }}
+                      className="w-full text-left bg-[#051424] hover:bg-[#1c2b3c] border border-[#454932] rounded-xl p-3 transition-all flex items-center gap-3 group"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-[#273647] flex items-center justify-center shrink-0 border border-[#454932]">
+                        <span className="material-symbols-outlined text-[#d2f000] text-lg">fitness_center</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-white truncate">{r.name}</p>
+                        <p className="text-[11px] text-[#c6c9ab]">{r.exercises.length} ejercicios</p>
+                      </div>
+                      <span className="material-symbols-outlined text-[#c6c9ab] group-hover:text-[#d2f000] text-lg">add</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-[#454932]/40">
+                <button
+                  onClick={() => {
+                    onAddExerciseToRoutine(addToRoutineTarget);
+                    setAddToRoutineTarget(null);
+                    setSelectedExerciseModal(null);
+                    onNavigateToCreador();
+                  }}
+                  className="w-full bg-[#d2f000]/10 hover:bg-[#d2f000]/20 border border-dashed border-[#d2f000]/40 text-[#d2f000] font-bold text-sm py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-lg">add_circle</span>
+                  Crear nueva rutina
                 </button>
               </div>
             </div>
