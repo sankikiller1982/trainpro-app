@@ -1,6 +1,6 @@
 // ID de la hoja de cálculo compartida entre todos los entrenadores
 export const SPREADSHEET_ID = '1l8tBDWLINx_Ui_6fKfm5cZAhIDe7E4I79ZBIjj1X86Y';
-export const API_URL = 'https://script.google.com/macros/s/AKfycbwF48CoXa8R55U2SeeTIxh8wXwAJJILtrScVijmWVBsb2M9VhjuvcGxZ2D9T36NInl4Lw/exec';
+export const API_URL = 'https://script.google.com/macros/s/AKfycbwiquZtw1lx0Qt3jYNqNaaiPx-O7xsnDG2os97hg711Ar392UMS2ePdQH71uLdAr2z4ww/exec';
 
 export type RecordType = 'student' | 'exercise' | 'routine' | 'saved_routine' | 'assignment';
 
