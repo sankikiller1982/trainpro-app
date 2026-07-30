@@ -3,9 +3,18 @@ export const API_URL = 'https://script.google.com/macros/s/AKfycbwF48CoXa8R55U2S
 export type RecordType = 'student' | 'exercise' | 'routine' | 'saved_routine' | 'assignment';
 
 export const sheetsApi = {
+  _trainer: '',
+
+  setTrainer(name: string) {
+    this._trainer = name;
+  },
+
   async fetchAll() {
     try {
-      const res = await fetch(API_URL);
+      const url = this._trainer
+        ? `${API_URL}?trainer=${encodeURIComponent(this._trainer)}`
+        : API_URL;
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Network response was not ok');
       return await res.json();
     } catch (error) {
@@ -25,6 +34,7 @@ export const sheetsApi = {
           action: 'save',
           id,
           type,
+          trainer: this._trainer,
           data: payload,
         }),
       });
@@ -46,6 +56,7 @@ export const sheetsApi = {
           action: 'delete',
           id,
           type,
+          trainer: this._trainer,
         }),
       });
       return await res.json();

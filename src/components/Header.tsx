@@ -5,25 +5,26 @@ interface HeaderProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   onOpenShare: () => void;
+  currentTrainer: string;
+  onLogout: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenShare }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenShare, currentTrainer, onLogout }) => {
   return (
     <header className="bg-[#051424] w-full sticky top-0 z-50 border-b border-[#454932] flex justify-between items-center px-4 md:px-16 h-[64px]">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#d2f000] bg-[#273647] flex items-center justify-center shrink-0">
-          <img
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxJO8n-RmNZe8wgGvkSOYwoqsXTc9uubJxFoFhz64n032YS3bbfBK4hlajfhJziW1PFa0C-PZM-acyMP6WvTNLPPoBHwGO27tj3H1poaJ5Po8UQmtEGusRr5CT7EodrOjJo2Iewm6zTzzAK0Q-UCE1vqaPZHKjs-nCfq2craeIzdTwhm8V-hokbvaav7uRXi_s3LIQxUF47c3pwLW4gbVNGNJSMyagby1RyUaQCt597sINrC5jVWA"
-            alt="Entrenador"
-            className="w-full h-full object-cover"
-          />
+          <span className="text-[#d2f000] text-lg font-bold">{currentTrainer.charAt(0).toUpperCase()}</span>
         </div>
-        <h1 
-          onClick={() => setActiveTab('alumnos')}
-          className="font-headline text-xl md:text-2xl font-extrabold text-white tracking-tighter cursor-pointer hover:text-[#d2f000] transition-colors"
-        >
-          TRAINPRO
-        </h1>
+        <div>
+          <h1 
+            onClick={() => setActiveTab('alumnos')}
+            className="font-headline text-xl md:text-2xl font-extrabold text-white tracking-tighter cursor-pointer hover:text-[#d2f000] transition-colors leading-none"
+          >
+            TRAINPRO
+          </h1>
+          <span className="text-[10px] text-[#c6c9ab] font-medium">{currentTrainer}</span>
+        </div>
       </div>
 
       {/* Web Navigation (Hidden on Mobile) */}
@@ -77,13 +78,22 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenS
         </button>
       </nav>
 
-      <button
-        onClick={onOpenShare}
-        className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:text-[#d2f000] hover:bg-[#122131] transition-all active:scale-95"
-        title="Compartir"
-      >
-        <span className="material-symbols-outlined">share</span>
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onOpenShare}
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:text-[#d2f000] hover:bg-[#122131] transition-all active:scale-95"
+          title="Compartir"
+        >
+          <span className="material-symbols-outlined">share</span>
+        </button>
+        <button
+          onClick={onLogout}
+          className="w-10 h-10 rounded-full flex items-center justify-center text-[#c6c9ab] hover:text-red-400 hover:bg-[#122131] transition-all active:scale-95"
+          title="Cambiar de entrenador"
+        >
+          <span className="material-symbols-outlined">logout</span>
+        </button>
+      </div>
     </header>
   );
 };

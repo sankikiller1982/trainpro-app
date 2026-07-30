@@ -8,6 +8,7 @@ import { Header } from './components/Header';
 import { ProgresoView } from './components/ProgresoView';
 import { ShareModal } from './components/ShareModal';
 import { ToastProvider, useToast } from './components/ToastContext';
+import { TrainerLogin } from './components/TrainerLogin';
 import { INITIAL_STUDENTS } from './data/mockData';
 import { getInitialExercisesCombined } from './data/allExercises';
 import { Exercise, RoutineAssignment, SavedRoutine, Student, TabType } from './types';
@@ -16,6 +17,11 @@ import { sheetsApi } from './api/googleSheets';
 function AppContent() {
   const { addToast } = useToast();
   
+  // Estado de entrenador (persistido en localStorage)
+  const [currentTrainer, setCurrentTrainer] = useState<string | null>(
+    () => localStorage.getItem('trainpro_trainer')
+  );
+
   // Estado de carga inicial
   const [isLoading, setIsLoading] = useState(true);
   
@@ -29,8 +35,29 @@ function AppContent() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
+  const handleLogin = useCallback((trainerName: string) => {
+    localStorage.setItem('trainpro_trainer', trainerName);
+    sheetsApi.setTrainer(trainerName);
+    setCurrentTrainer(trainerName);
+    // Recargar datos con el nuevo entrenador
+    setIsLoading(true);
+    window.location.reload();
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('trainpro_trainer');
+    sheetsApi.setTrainer('');
+    setCurrentTrainer(null);
+    window.location.reload();
+  }, []);
+
   // Carga inicial de datos desde Google Sheets y Dataset
   useEffect(() => {
+    if (!currentTrainer) {
+      setIsLoading(false);
+      return;
+    }
+    sheetsApi.setTrainer(currentTrainer);
     async function loadData() {
       try {
         const db = await sheetsApi.fetchAll();
@@ -208,13 +235,18 @@ function AppContent() {
     }
   }, [addToast]);
 
+  // Pantalla de Login si no hay entrenador
+  if (!currentTrainer) {
+    return <TrainerLogin onLogin={handleLogin} />;
+  }
+
   // Pantalla de Carga Inicial
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#051424] text-[#d4e4fa]">
         <div className="w-16 h-16 border-4 border-[#454932] border-t-[#d2f000] rounded-full animate-spin mb-6"></div>
         <h1 className="font-headline text-2xl font-extrabold text-white tracking-tighter mb-2">TRAINPRO</h1>
-        <p className="text-[#c6c9ab] text-sm animate-pulse">Sincronizando rutinas y catálogo en la nube...</p>
+        <p className="text-[#c6c9ab] text-sm animate-pulse">Cargando datos de <strong className="text-white">{currentTrainer}</strong> desde la nube...</p>
       </div>
     );
   }
@@ -225,6 +257,8 @@ function AppContent() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenShare={() => setIsShareModalOpen(true)}
+        currentTrainer={currentTrainer}
+        onLogout={handleLogout}
       />
 
       <div className="flex-1 flex flex-col relative z-0">
