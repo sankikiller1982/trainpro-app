@@ -52,8 +52,8 @@ function AppContent() {
         // Combinar ejercicios iniciales + dataset completo + custom creados
         const baseCombined = getInitialExercisesCombined();
         if (loadedExercises.length > 0) {
-          // Agregar custom exercises subidos previamente por el usuario
-          const customOnly = loadedExercises.filter((e) => !baseCombined.some((b) => b.id === e.id));
+          // Agregar custom exercises subidos previamente por el usuario, evitando duplicados
+          const customOnly = loadedExercises.filter((e) => !baseCombined.some((b) => b.id === e.id || b.name.toLowerCase() === e.name.toLowerCase()));
           setExercises([...customOnly, ...baseCombined]);
         } else {
           setExercises(baseCombined);

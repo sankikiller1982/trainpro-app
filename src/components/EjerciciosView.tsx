@@ -32,6 +32,9 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
   const [newGifUrl, setNewGifUrl] = useState('');
   const [newSets, setNewSets] = useState(3);
   const [newReps, setNewReps] = useState('10-12');
+  const [showDatasetPicker, setShowDatasetPicker] = useState<'image' | 'gif' | null>(null);
+
+  const datasetExercises = useMemo(() => exercises.filter(e => e.id.startsWith('ds-')), [exercises]);
 
   const categories: MuscleCategory[] = [
     'Todos',
@@ -391,26 +394,46 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                 <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
                   URL de Imagen (Thumbnail)
                 </label>
-                <input
-                  type="url"
-                  value={newImageUrl}
-                  onChange={(e) => setNewImageUrl(e.target.value)}
-                  placeholder="https://ejemplo.com/imagen.jpg (opcional)"
-                  className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={newImageUrl}
+                    onChange={(e) => setNewImageUrl(e.target.value)}
+                    placeholder="https://ejemplo.com/imagen.jpg (opcional)"
+                    className="flex-1 bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDatasetPicker('image')}
+                    className="shrink-0 bg-[#1c2b3c] hover:bg-[#273647] border border-[#454932] rounded-lg px-2.5 py-1 text-xs text-[#c6c9ab] font-semibold transition-colors"
+                    title="Usar imagen del dataset"
+                  >
+                    Dataset
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
                   URL de GIF Animado
                 </label>
-                <input
-                  type="url"
-                  value={newGifUrl}
-                  onChange={(e) => setNewGifUrl(e.target.value)}
-                  placeholder="https://ejemplo.com/animacion.gif (opcional)"
-                  className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={newGifUrl}
+                    onChange={(e) => setNewGifUrl(e.target.value)}
+                    placeholder="https://ejemplo.com/animacion.gif (opcional)"
+                    className="flex-1 bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDatasetPicker('gif')}
+                    className="shrink-0 bg-[#1c2b3c] hover:bg-[#273647] border border-[#454932] rounded-lg px-2.5 py-1 text-xs text-[#c6c9ab] font-semibold transition-colors"
+                    title="Usar GIF del dataset"
+                  >
+                    Dataset
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -471,6 +494,60 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dataset Image Picker Modal */}
+      {showDatasetPicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#122131] border border-[#454932] rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl animate-scale-in flex flex-col">
+            <div className="p-4 border-b border-[#454932] flex items-center justify-between bg-[#051424] shrink-0">
+              <h3 className="font-headline text-base font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#d2f000]">photo_library</span>
+                {showDatasetPicker === 'image' ? 'Seleccionar Imagen' : 'Seleccionar GIF'} del Dataset
+              </h3>
+              <button
+                onClick={() => setShowDatasetPicker(null)}
+                className="text-[#c6c9ab] hover:text-white p-1"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                {datasetExercises.map((ex) => {
+                  const src = showDatasetPicker === 'gif' && ex.gifUrl ? ex.gifUrl : ex.imageUrl;
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => {
+                        if (showDatasetPicker === 'gif' && ex.gifUrl) {
+                          setNewGifUrl(ex.gifUrl);
+                        } else {
+                          setNewImageUrl(ex.imageUrl);
+                        }
+                        setShowDatasetPicker(null);
+                      }}
+                      className="group relative aspect-square rounded-lg overflow-hidden border border-[#454932] hover:border-[#d2f000] transition-all bg-[#051424]"
+                    >
+                      <img
+                        src={src}
+                        alt={ex.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-1">
+                        <span className="text-[10px] text-white font-semibold text-center leading-tight truncate">
+                          {ex.name}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { RoutineExercise, SavedRoutine, Student } from '../types';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Exercise, RoutineExercise, SavedRoutine, Student } from '../types';
+import { useToast } from './ToastContext';
 
 interface CreadorViewProps {
   students: Student[];
@@ -10,6 +11,8 @@ interface CreadorViewProps {
   onOpenAddModal: () => void;
 }
 
+type EditorMode = 'list' | 'editor';
+
 export const CreadorView: React.FC<CreadorViewProps> = ({
   students,
   savedRoutines,
@@ -18,70 +21,56 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
   onAssignRoutine,
   onOpenAddModal,
 }) => {
-  // Mode: 'library' (routine list) or 'editor' (building/editing a routine)
-  const [mode, setMode] = useState<'library' | 'editor'>('library');
+  const { addToast } = useToast();
 
-  // Currently editing routine state
+  // Editor mode: list of saved routines vs editing a routine
+  const [mode, setMode] = useState<EditorMode>('list');
+
+  // Internal editor state
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
-  const [routineTitle, setRoutineTitle] = useState('Rutina Hipertrofia A');
-  const [routineDescription, setRoutineDescription] = useState('Enfoque en tensión mecánica y sobrecarga progresiva.');
+  const [routineTitle, setRoutineTitle] = useState('Nueva Rutina');
+  const [routineDescription, setRoutineDescription] = useState('');
   const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
 
-  // Modals & UI states
-  const [assignModalRoutine, setAssignModalRoutine] = useState<SavedRoutine | null>(null);
-  const [selectedStudentForAssign, setSelectedStudentForAssign] = useState<string>('');
+  // UI state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [confirmDeleteExId, setConfirmDeleteExId] = useState<string | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [assignModalRoutine, setAssignModalRoutine] = useState<SavedRoutine | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
 
-  // Drag & Drop refs
+  // Drag & Drop state
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  // ----------------------------------------------------
-  // Actions for Library
-  // ----------------------------------------------------
-
-  const handleStartNewRoutine = () => {
-    setEditingRoutineId(null);
-    setRoutineTitle('Nueva Rutina Personalizada');
-    setRoutineDescription('');
-    setRoutineExercises([]);
-    setMode('editor');
-  };
-
-  const handleEditRoutine = (routine: SavedRoutine) => {
-    setEditingRoutineId(routine.id);
-    setRoutineTitle(routine.name);
-    setRoutineDescription(routine.description || '');
-    setRoutineExercises([...routine.exercises]);
-    setMode('editor');
-  };
-
-  const handleSaveCurrentRoutine = () => {
-    if (!routineTitle.trim()) return;
-
-    const routineToSave: SavedRoutine = {
-      id: editingRoutineId || `rt-${Date.now()}`,
-      name: routineTitle.trim(),
-      description: routineDescription.trim(),
-      exercises: routineExercises,
-      createdAt: editingRoutineId
-        ? savedRoutines.find((r) => r.id === editingRoutineId)?.createdAt || new Date().toISOString()
-        : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+  // Expose a function on window so AddExerciseModal can add exercises to the editor
+  const handleAddExerciseFromCatalog = useCallback((exercise: Exercise) => {
+    const newRoutineEx: RoutineExercise = {
+      id: `re-${Date.now()}-${Math.random()}`,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      targetMuscles: exercise.secondaryMuscles,
+      imageUrl: exercise.imageUrl,
+      gifUrl: exercise.gifUrl,
+      sets: exercise.defaultSets || 3,
+      reps: exercise.defaultReps || '10',
+      restTime: '60 seg',
+      notes: '',
     };
+    setRoutineExercises((prev) => [...prev, newRoutineEx]);
+  }, []);
 
-    onSaveRoutine(routineToSave);
-    setEditingRoutineId(routineToSave.id);
-  };
+  useEffect(() => {
+    if (mode === 'editor') {
+      (window as any).__addExerciseToEditor = handleAddExerciseFromCatalog;
+    }
+    return () => {
+      delete (window as any).__addExerciseToEditor;
+    };
+  }, [mode, handleAddExerciseFromCatalog]);
 
-  // ----------------------------------------------------
-  // Drag & Drop Handlers
-  // ----------------------------------------------------
-
+  // Drag handlers
   const handleDragStart = (idx: number) => {
     dragItem.current = idx;
     setDraggingIdx(idx);
@@ -105,6 +94,18 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
     setDragOverIdx(null);
   };
 
+  const handleUpdateExercise = (id: string, updates: Partial<RoutineExercise>) => {
+    setRoutineExercises((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    );
+  };
+
+  const handleRemoveExercise = (id: string) => {
+    setRoutineExercises((prev) => prev.filter((item) => item.id !== id));
+    addToast('Ejercicio eliminado de la rutina', 'info');
+    setConfirmDeleteId(null);
+  };
+
   const toggleNotes = (id: string) => {
     setExpandedNotes((prev) => {
       const next = new Set(prev);
@@ -114,183 +115,352 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
     });
   };
 
-  const updateExercise = (id: string, updates: Partial<RoutineExercise>) => {
-    setRoutineExercises((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
+  // New routine
+  const handleNewRoutine = () => {
+    setEditingRoutineId(null);
+    setRoutineTitle('Nueva Rutina');
+    setRoutineDescription('');
+    setRoutineExercises([]);
+    setExpandedNotes(new Set());
+    setMode('editor');
   };
 
-  const removeExercise = (id: string) => {
-    setRoutineExercises((prev) => prev.filter((item) => item.id !== id));
+  // Edit existing
+  const handleEditRoutine = (routine: SavedRoutine) => {
+    setEditingRoutineId(routine.id);
+    setRoutineTitle(routine.name);
+    setRoutineDescription(routine.description || '');
+    setRoutineExercises([...routine.exercises]);
+    setExpandedNotes(new Set());
+    setMode('editor');
   };
 
-  // Expose function for external add modal
-  // Note: App.tsx will call onAddExerciseToRoutine which we handle via updating routineExercises
-  React.useEffect(() => {
-    (window as any).__addExerciseToEditor = (ex: any) => {
-      const newRoutineEx: RoutineExercise = {
-        id: `re-${Date.now()}-${Math.random()}`,
-        exerciseId: ex.id,
-        exerciseName: ex.name,
-        targetMuscles: ex.secondaryMuscles,
-        imageUrl: ex.imageUrl,
-        gifUrl: ex.gifUrl,
-        sets: ex.defaultSets || 3,
-        reps: ex.defaultReps || '10',
-        restTime: '60 seg',
-        notes: '',
-      };
-      setRoutineExercises((prev) => [...prev, newRoutineEx]);
-    };
-  }, []);
-
-  const handleConfirmAssign = () => {
-    if (assignModalRoutine && selectedStudentForAssign) {
-      onAssignRoutine(assignModalRoutine, selectedStudentForAssign);
-      setAssignModalRoutine(null);
-      setSelectedStudentForAssign('');
+  // Save
+  const handleSave = () => {
+    if (!routineTitle.trim()) {
+      addToast('Ingresa un nombre para la rutina', 'error');
+      return;
     }
+    if (routineExercises.length === 0) {
+      addToast('Añade al menos un ejercicio', 'error');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const routine: SavedRoutine = {
+      id: editingRoutineId || `rt-${Date.now()}`,
+      name: routineTitle.trim(),
+      description: routineDescription.trim(),
+      exercises: routineExercises,
+      createdAt: editingRoutineId
+        ? (savedRoutines.find((r) => r.id === editingRoutineId)?.createdAt || now)
+        : now,
+      updatedAt: now,
+    };
+
+    onSaveRoutine(routine);
+    setMode('list');
   };
 
-  const totalSets = routineExercises.reduce((acc, ex) => acc + ex.sets, 0);
+  // Share via WhatsApp
+  const handleShareWhatsApp = () => {
+    let text = `🏋️ *TRAINPRO - ${routineTitle}*\n\n`;
 
-  return (
-    <main className="flex-grow px-4 md:px-16 py-6 max-w-7xl mx-auto w-full pb-36">
-      {/* MODE 1: ROUTINE LIBRARY */}
-      {mode === 'library' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Header & Quick Create */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#122131] rounded-2xl p-6 border border-[#454932] shadow-xl">
-            <div>
-              <span className="px-3 py-1 rounded-full bg-[#d2f000]/10 text-[#d2f000] font-bold text-xs uppercase tracking-wider mb-2 inline-block">
-                Creador & Gestión
-              </span>
-              <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-white">
-                Rutinas e Itinerarios
-              </h2>
-              <p className="text-[#c6c9ab] text-sm mt-1">
-                Crea, reutiliza y asigna rutinas con un identificador único para cada alumno.
-              </p>
-            </div>
+    if (routineExercises.length === 0) {
+      text += `(Sin ejercicios asignados aún)`;
+    } else {
+      routineExercises.forEach((ex, i) => {
+        text += `${i + 1}. *${ex.exerciseName}* (${ex.targetMuscles})\n`;
+        text += `   • Series: ${ex.sets} | Reps: ${ex.reps}`;
+        if (ex.restTime) text += ` | Descanso: ${ex.restTime}`;
+        text += `\n`;
+        if (ex.notes) text += `   📝 ${ex.notes}\n`;
+        text += `\n`;
+      });
+    }
+
+    text += `¡A darlo todo hoy en el entrenamiento! 💪🔥`;
+    const encodedText = encodeURIComponent(text);
+    window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+  };
+
+  // Computed stats
+  const totalSets = routineExercises.reduce((acc, ex) => acc + ex.sets, 0);
+  const uniqueMuscles = [...new Set(routineExercises.flatMap(ex => ex.targetMuscles.split(', ')))];
+
+  // ========================================
+  //  RENDER: List of Saved Routines
+  // ========================================
+  if (mode === 'list') {
+    return (
+      <main className="flex-grow px-4 md:px-16 py-6 max-w-7xl mx-auto w-full pb-36">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-white mb-1">
+              Creador de Rutinas
+            </h2>
+            <p className="text-[#c6c9ab] text-sm">
+              {savedRoutines.length} rutinas guardadas · Crea, edita y asigna rutinas a tus alumnos
+            </p>
+          </div>
+          <button
+            onClick={handleNewRoutine}
+            className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)] self-start md:self-auto"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Nueva Rutina
+          </button>
+        </div>
+
+        {savedRoutines.length === 0 ? (
+          <div className="text-center py-20 px-4 bg-[#122131]/40 rounded-2xl border border-dashed border-[#454932] flex flex-col items-center animate-fade-in">
+            <span className="material-symbols-outlined text-6xl text-[#c6c9ab] mb-4">architecture</span>
+            <h3 className="font-headline text-xl font-bold text-white mb-2">Sin rutinas todavía</h3>
+            <p className="text-sm text-[#c6c9ab] max-w-md mb-6">
+              Crea tu primera rutina seleccionando ejercicios del catálogo, configura series y repeticiones, y guárdala para asignarla a tus alumnos.
+            </p>
             <button
-              onClick={handleStartNewRoutine}
-              className="bg-[#d2f000] text-[#191e00] font-headline font-extrabold text-sm px-6 py-3.5 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)] cursor-pointer self-start md:self-auto"
+              onClick={handleNewRoutine}
+              className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-6 py-3 rounded-lg flex items-center gap-2 hover:opacity-90 transition-all"
             >
-              <span className="material-symbols-outlined text-[20px]">add_circle</span>
-              Crear Nueva Rutina
+              <span className="material-symbols-outlined text-base">add</span>
+              Crear mi Primera Rutina
             </button>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+            {savedRoutines.map((routine) => (
+              <div
+                key={routine.id}
+                className="bg-[#122131] rounded-xl border border-[#454932] overflow-hidden shadow-lg hover:border-[#d2f000]/50 transition-all group flex flex-col"
+              >
+                {/* Preview: first exercise image or placeholder */}
+                <div className="relative h-36 bg-[#051424] overflow-hidden">
+                  {routine.exercises.length > 0 ? (
+                    <img
+                      src={routine.exercises[0].gifUrl || routine.exercises[0].imageUrl}
+                      alt={routine.exercises[0].exerciseName}
+                      className="w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-all duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="material-symbols-outlined text-4xl text-[#454932]">fitness_center</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#122131] via-transparent to-transparent" />
+                  <div className="absolute bottom-3 left-4 right-4">
+                    <h3 className="font-headline text-lg font-bold text-white group-hover:text-[#d2f000] transition-colors truncate">
+                      {routine.name}
+                    </h3>
+                    {routine.description && (
+                      <p className="text-xs text-[#c6c9ab] truncate mt-0.5">{routine.description}</p>
+                    )}
+                  </div>
+                  <div className="absolute top-3 right-3 flex items-center gap-1">
+                    <span className="bg-[#1c2b3c]/80 backdrop-blur-sm text-[#d2f000] font-bold text-[10px] px-2 py-0.5 rounded-full border border-[#454932]">
+                      {routine.exercises.length} ej.
+                    </span>
+                  </div>
+                </div>
 
-          {/* Routine List Grid */}
-          <div>
-            <h3 className="font-headline text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#d2f000]">folder_copy</span>
-              Rutinas Guardadas ({savedRoutines.length})
-            </h3>
+                {/* Exercise mini-list */}
+                <div className="p-4 flex-1">
+                  <div className="space-y-1.5 mb-4 max-h-[120px] overflow-y-auto scrollbar-hide">
+                    {routine.exercises.slice(0, 4).map((ex, idx) => (
+                      <div key={ex.id || idx} className="flex items-center gap-2 text-xs">
+                        <span className="text-[#d2f000] font-bold w-4 text-right">{idx + 1}.</span>
+                        <span className="text-white truncate flex-1">{ex.exerciseName}</span>
+                        <span className="text-[#c6c9ab] shrink-0">{ex.sets}×{ex.reps}</span>
+                      </div>
+                    ))}
+                    {routine.exercises.length > 4 && (
+                      <p className="text-[10px] text-[#c6c9ab] pl-6">+{routine.exercises.length - 4} más...</p>
+                    )}
+                  </div>
 
-            {savedRoutines.length === 0 ? (
-              <div className="text-center py-16 px-4 bg-[#122131]/40 rounded-2xl border border-dashed border-[#454932] flex flex-col items-center">
-                <span className="material-symbols-outlined text-5xl text-[#c6c9ab] mb-3">fitness_center</span>
-                <h4 className="font-headline text-lg font-bold text-white mb-1">No hay rutinas creadas aún</h4>
-                <p className="text-xs text-[#c6c9ab] max-w-md mb-4">
-                  Crea tu primera plantilla de entrenamiento para asignársela a tus alumnos o reutilizarla cuando quieras.
-                </p>
+                  <p className="text-[10px] text-[#c6c9ab] mb-3">
+                    Actualizada: {new Date(routine.updatedAt).toLocaleDateString('es-ES')}
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="p-4 pt-0 flex gap-2">
+                  <button
+                    onClick={() => handleEditRoutine(routine)}
+                    className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold py-2 rounded-lg border border-[#454932] text-[#c6c9ab] hover:text-white hover:border-[#c6c9ab] transition-all"
+                  >
+                    <span className="material-symbols-outlined text-sm">edit</span>
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAssignModalRoutine(routine);
+                      if (students.length > 0) setSelectedStudentId(students[0].id);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 text-xs font-bold py-2 rounded-lg bg-[#d2f000] text-[#191e00] hover:opacity-90 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-sm">person_add</span>
+                    Asignar
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(routine.id)}
+                    className="flex items-center justify-center p-2 rounded-lg border border-[#454932] text-[#c6c9ab] hover:text-[#ffb4ab] hover:border-[#ffb4ab] transition-all"
+                    title="Eliminar rutina"
+                  >
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {confirmDeleteId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+            <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-[#ffb4ab]/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[#ffb4ab]">delete</span>
+                </div>
+                <h3 className="font-headline text-lg font-bold text-white">¿Eliminar rutina?</h3>
+              </div>
+              <p className="text-sm text-[#c6c9ab] mb-6">
+                Esta acción eliminará la rutina permanentemente de la nube. Las asignaciones existentes se mantendrán.
+              </p>
+              <div className="flex justify-end gap-3">
                 <button
-                  onClick={handleStartNewRoutine}
-                  className="bg-[#d2f000] text-[#191e00] font-bold text-xs px-5 py-2.5 rounded-lg flex items-center gap-1.5 hover:opacity-90 transition-all"
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white font-medium"
                 >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  Crear Mi Primera Rutina
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    onDeleteRoutine(confirmDeleteId);
+                    setConfirmDeleteId(null);
+                  }}
+                  className="bg-[#ffb4ab] text-[#690005] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                  Eliminar
                 </button>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
-                {savedRoutines.map((routine) => (
-                  <div
-                    key={routine.id}
-                    className="bg-[#122131] rounded-2xl p-5 border border-[#454932] hover:border-[#d2f000]/60 transition-all shadow-lg flex flex-col justify-between group"
-                  >
-                    <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-headline text-lg font-bold text-white group-hover:text-[#d2f000] transition-colors">
-                          {routine.name}
-                        </h4>
-                        <button
-                          onClick={() => setConfirmDeleteId(routine.id)}
-                          className="text-[#c6c9ab] hover:text-[#ffb4ab] p-1 transition-colors"
-                          title="Eliminar rutina"
-                        >
-                          <span className="material-symbols-outlined text-base">delete</span>
-                        </button>
-                      </div>
-
-                      <p className="text-xs text-[#c6c9ab] line-clamp-2 mb-4">
-                        {routine.description || 'Sin descripción.'}
-                      </p>
-
-                      <div className="flex items-center gap-4 text-xs text-[#d4e4fa] bg-[#051424] p-3 rounded-xl mb-4 border border-[#454932]/40">
-                        <div className="flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-base text-[#d2f000]">fitness_center</span>
-                          <span className="font-bold">{routine.exercises.length}</span> ejercicios
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-base text-blue-400">repeat</span>
-                          <span className="font-bold">{routine.exercises.reduce((a, b) => a + b.sets, 0)}</span> series
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-2 border-t border-[#454932]/40">
-                      <button
-                        onClick={() => handleEditRoutine(routine)}
-                        className="flex-1 py-2 rounded-lg bg-[#1c2b3c] hover:bg-[#273647] text-white text-xs font-semibold flex items-center justify-center gap-1 border border-[#454932]"
-                      >
-                        <span className="material-symbols-outlined text-sm">edit</span>
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAssignModalRoutine(routine);
-                          if (students.length > 0) setSelectedStudentForAssign(students[0].id);
-                        }}
-                        className="flex-1 py-2 rounded-lg bg-[#d2f000] text-[#191e00] hover:opacity-90 text-xs font-bold flex items-center justify-center gap-1 shadow"
-                      >
-                        <span className="material-symbols-outlined text-sm">person_add</span>
-                        Asignar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* MODE 2: EDITOR */}
-      {mode === 'editor' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Top Bar Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#122131] p-4 rounded-xl border border-[#454932]">
+        {/* Assign to Student Modal */}
+        {assignModalRoutine && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+            <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-sm overflow-hidden shadow-2xl animate-scale-in">
+              <div className="p-5 border-b border-[#454932] bg-[#051424]">
+                <h3 className="font-headline text-lg font-bold text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#d2f000]">person_add</span>
+                  Asignar Rutina
+                </h3>
+                <p className="text-xs text-[#c6c9ab] mt-1">
+                  Asignar "<span className="text-white font-semibold">{assignModalRoutine.name}</span>" a un alumno
+                </p>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1.5">
+                    Seleccionar Alumno
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedStudentId}
+                      onChange={(e) => setSelectedStudentId(e.target.value)}
+                      className="w-full bg-[#051424] border border-[#454932] text-[#d4e4fa] font-medium text-sm rounded-lg py-2.5 px-3 pr-8 focus:border-[#d2f000] focus:outline-none appearance-none cursor-pointer"
+                    >
+                      {students.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="material-symbols-outlined absolute right-2 top-2.5 pointer-events-none text-[#c6c9ab] text-base">
+                      arrow_drop_down
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-[#051424] rounded-lg p-3 border border-[#454932]/40">
+                  <p className="text-[10px] text-[#c6c9ab] uppercase font-bold mb-1">Resumen de la rutina</p>
+                  <p className="text-sm text-white font-semibold">{assignModalRoutine.exercises.length} ejercicios</p>
+                  <p className="text-xs text-[#c6c9ab] mt-0.5">
+                    {assignModalRoutine.exercises.reduce((a, e) => a + e.sets, 0)} series totales
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setAssignModalRoutine(null)}
+                    className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selectedStudentId) {
+                        onAssignRoutine(assignModalRoutine, selectedStudentId);
+                        setAssignModalRoutine(null);
+                      }
+                    }}
+                    className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-base">check</span>
+                    Asignar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    );
+  }
+
+  // ========================================
+  //  RENDER: Routine Editor
+  // ========================================
+  return (
+    <main className="flex-grow px-4 md:px-16 py-6 max-w-7xl mx-auto w-full pb-36">
+      <div className="flex flex-col gap-6">
+        {/* Editor Header */}
+        <section className="bg-[#122131] rounded-xl p-4 md:p-5 border border-[#454932] shadow-lg animate-fade-in-up">
+          <div className="flex items-center justify-between mb-4">
             <button
-              onClick={() => setMode('library')}
-              className="flex items-center gap-1 text-xs text-[#c6c9ab] hover:text-white font-semibold self-start sm:self-auto"
+              onClick={() => setMode('list')}
+              className="flex items-center gap-1 text-[#c6c9ab] hover:text-white transition-colors text-sm font-medium"
             >
               <span className="material-symbols-outlined text-base">arrow_back</span>
-              Volver a Rutinas Guardadas
+              Volver a Rutinas
             </button>
-
-            <div className="flex gap-2 self-end sm:self-auto">
+            <div className="flex gap-2">
+              {routineExercises.length > 0 && (
+                <>
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1 text-[#c6c9ab] hover:text-white transition-colors text-xs font-semibold bg-[#051424] px-3 py-2 rounded-lg border border-[#454932]"
+                    title="Exportar como PDF"
+                  >
+                    <span className="material-symbols-outlined text-sm">print</span>
+                    PDF
+                  </button>
+                  <button
+                    onClick={handleShareWhatsApp}
+                    className="flex items-center gap-1 text-white text-xs font-bold bg-[#25D366] px-3 py-2 rounded-lg hover:bg-[#128C7E] transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">send</span>
+                    WhatsApp
+                  </button>
+                </>
+              )}
               <button
-                onClick={() => window.print()}
-                className="flex items-center gap-1 text-xs font-semibold text-[#c6c9ab] hover:text-white bg-[#051424] px-3 py-2 rounded-lg border border-[#454932]"
-              >
-                <span className="material-symbols-outlined text-sm">print</span>
-                PDF
-              </button>
-              <button
-                onClick={handleSaveCurrentRoutine}
-                className="flex items-center gap-1 text-xs font-bold bg-[#d2f000] text-[#191e00] px-4 py-2 rounded-lg hover:opacity-90 shadow"
+                onClick={handleSave}
+                className="flex items-center gap-1 text-[#191e00] text-xs font-bold bg-[#d2f000] px-4 py-2 rounded-lg hover:opacity-90 transition-all"
               >
                 <span className="material-symbols-outlined text-sm">save</span>
                 Guardar Rutina
@@ -298,68 +468,83 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
             </div>
           </div>
 
-          {/* Routine Header Info */}
-          <div className="bg-[#122131] rounded-2xl p-6 border border-[#454932] space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] uppercase font-bold text-[#c6c9ab] block mb-1">Nombre Identificador de la Rutina</label>
+              <label className="font-semibold text-xs text-[#c6c9ab] mb-1 uppercase tracking-wider block">
+                Nombre de la Rutina *
+              </label>
               <input
                 type="text"
                 value={routineTitle}
                 onChange={(e) => setRoutineTitle(e.target.value)}
-                placeholder="Ej. Torso Pesado - Día 1"
-                className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-xl font-bold rounded-lg py-2 px-3 focus:border-[#d2f000] focus:outline-none"
+                className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-lg font-bold rounded-lg focus:border-[#d2f000] focus:outline-none px-3 py-2 transition-colors"
+                placeholder="Ej. Lunes: Día de Empuje"
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase font-bold text-[#c6c9ab] block mb-1">Descripción u Objetivos</label>
+              <label className="font-semibold text-xs text-[#c6c9ab] mb-1 uppercase tracking-wider block">
+                Descripción (opcional)
+              </label>
               <input
                 type="text"
                 value={routineDescription}
                 onChange={(e) => setRoutineDescription(e.target.value)}
-                placeholder="Ej. Enfoque en pectoral superior e hipertrofia de hombros."
-                className="w-full bg-[#051424] border border-[#454932] text-[#d4e4fa] text-xs rounded-lg py-2 px-3 focus:border-[#d2f000] focus:outline-none"
+                className="w-full bg-[#051424] border border-[#454932] text-[#d4e4fa] text-sm rounded-lg focus:border-[#d2f000] focus:outline-none px-3 py-2.5 transition-colors"
+                placeholder="Ej. Rutina de fuerza para principiantes"
               />
             </div>
           </div>
+        </section>
 
-          {/* Quick Stats */}
-          {routineExercises.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-[#122131] rounded-xl p-3 border border-[#454932]/50 text-center">
-                <p className="text-[10px] text-[#c6c9ab] uppercase font-bold">Ejercicios</p>
-                <p className="font-headline text-xl font-bold text-[#d2f000]">{routineExercises.length}</p>
-              </div>
-              <div className="bg-[#122131] rounded-xl p-3 border border-[#454932]/50 text-center">
-                <p className="text-[10px] text-[#c6c9ab] uppercase font-bold">Series Total</p>
-                <p className="font-headline text-xl font-bold text-white">{totalSets}</p>
-              </div>
-              <div className="bg-[#122131] rounded-xl p-3 border border-[#454932]/50 text-center">
-                <p className="text-[10px] text-[#c6c9ab] uppercase font-bold">Estado</p>
-                <p className="font-headline text-xs font-bold text-green-400 mt-1">Listo para guardar</p>
-              </div>
+        {/* Quick Stats */}
+        {routineExercises.length > 0 && (
+          <div className="grid grid-cols-3 gap-3 animate-fade-in-up">
+            <div className="bg-[#122131] rounded-lg p-3 border border-[#454932]/50 text-center">
+              <p className="text-[10px] text-[#c6c9ab] uppercase font-bold">Ejercicios</p>
+              <p className="font-headline text-xl font-bold text-[#d2f000]">{routineExercises.length}</p>
             </div>
-          )}
+            <div className="bg-[#122131] rounded-lg p-3 border border-[#454932]/50 text-center">
+              <p className="text-[10px] text-[#c6c9ab] uppercase font-bold">Series Total</p>
+              <p className="font-headline text-xl font-bold text-white">{totalSets}</p>
+            </div>
+            <div className="bg-[#122131] rounded-lg p-3 border border-[#454932]/50 text-center">
+              <p className="text-[10px] text-[#c6c9ab] uppercase font-bold">Grupos</p>
+              <p className="font-headline text-xl font-bold text-white">{uniqueMuscles.length}</p>
+            </div>
+          </div>
+        )}
 
-          {/* Add Exercise Button */}
-          <div className="flex justify-between items-center">
-            <h3 className="font-headline text-lg font-bold text-white">Ejercicios de la Rutina</h3>
+        {/* Workout Builder Canvas */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-headline text-lg font-bold text-white flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#d2f000]">format_list_numbered</span>
+              Ejercicios de la Rutina
+            </h3>
             <button
               onClick={onOpenAddModal}
-              className="bg-[#d2f000] text-[#191e00] font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 hover:opacity-90 shadow"
+              className="flex items-center gap-1.5 text-[#d2f000] hover:opacity-80 transition-opacity font-bold text-sm bg-[#122131] px-4 py-2 rounded-lg border border-[#d2f000]/30 hover:border-[#d2f000]"
             >
               <span className="material-symbols-outlined text-base">add</span>
-              Añadir Ejercicio desde Catálogo
+              Añadir Ejercicio
             </button>
           </div>
 
-          {/* Exercise List Canvas */}
+          {/* Exercise List */}
           {routineExercises.length === 0 ? (
-            <div className="text-center py-16 px-4 bg-[#122131]/40 rounded-2xl border border-dashed border-[#454932] flex flex-col items-center">
+            <div className="text-center py-16 px-4 bg-[#122131]/40 rounded-xl border border-dashed border-[#454932] flex flex-col items-center animate-fade-in">
               <span className="material-symbols-outlined text-5xl text-[#c6c9ab] mb-3">architecture</span>
-              <h4 className="font-headline text-lg font-bold text-white mb-1">Sin ejercicios agregados</h4>
+              <h3 className="font-headline text-lg font-bold text-white mb-1">Rutina vacía</h3>
               <p className="text-xs text-[#c6c9ab] max-w-sm mb-4">
-                Usa el botón de arriba para seleccionar ejercicios del catálogo y armar tu rutina.
+                Añade ejercicios desde el catálogo para construir esta rutina.
               </p>
+              <button
+                onClick={onOpenAddModal}
+                className="bg-[#d2f000] text-[#191e00] font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1 hover:opacity-90 transition-all"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                Seleccionar Ejercicio
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
@@ -377,41 +562,44 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
                     dragOverIdx === index && draggingIdx !== index ? 'border-[#d2f000] bg-[#122131]/80' : 'border-[#454932]'
                   }`}
                 >
-                  {/* Card Media Header */}
+                  {/* Image Header */}
                   <div
-                    className="bg-cover bg-center w-full h-36 relative cursor-grab active:cursor-grabbing"
+                    className="bg-cover bg-center w-full h-32 relative cursor-grab active:cursor-grabbing"
                     style={{ backgroundImage: `url('${item.gifUrl || item.imageUrl}')` }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-t from-[#122131] via-black/40 to-black/60" />
 
+                    {/* Drag Handle */}
                     <div className="absolute top-2 left-2 text-white/60 hover:text-white bg-black/40 rounded p-0.5">
                       <span className="material-symbols-outlined text-sm">drag_indicator</span>
                     </div>
 
+                    {/* Exercise Number Badge */}
                     <div className="absolute top-2 left-10 bg-[#d2f000] text-[#191e00] w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
                       {index + 1}
                     </div>
 
                     <div className="absolute bottom-2 left-3 right-8">
-                      <h4 className="font-headline text-base font-bold text-white leading-tight">
+                      <h3 className="font-headline text-base font-bold text-white leading-tight">
                         {item.exerciseName}
-                      </h4>
+                      </h3>
                       <p className="text-xs text-[#c6c9ab] truncate mt-0.5">{item.targetMuscles}</p>
                     </div>
 
                     <button
-                      onClick={() => setConfirmDeleteExId(item.id)}
-                      className="absolute top-2 right-2 text-[#c6c9ab] hover:text-[#ffb4ab] transition-colors bg-black/60 rounded-full p-1"
+                      onClick={() => setConfirmDeleteId(item.id)}
+                      className="absolute top-2 right-2 text-[#c6c9ab] hover:text-[#ffb4ab] transition-colors bg-black/60 rounded-full p-1 hover:bg-black"
+                      title="Eliminar ejercicio"
                     >
                       <span className="material-symbols-outlined text-sm">close</span>
                     </button>
                   </div>
 
-                  {/* Card Inputs */}
+                  {/* Inputs Section */}
                   <div className="p-3 bg-[#122131] flex flex-col gap-2">
                     <div className="flex gap-3">
                       <div className="flex-1">
-                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase block mb-1">
+                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase tracking-wider block mb-1">
                           Series
                         </label>
                         <input
@@ -419,52 +607,58 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
                           min="1"
                           max="20"
                           value={item.sets}
-                          onChange={(e) => updateExercise(item.id, { sets: parseInt(e.target.value) || 1 })}
-                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-lg font-bold rounded focus:border-[#d2f000] text-center py-1"
+                          onChange={(e) =>
+                            handleUpdateExercise(item.id, { sets: parseInt(e.target.value) || 1 })
+                          }
+                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-xl font-bold rounded focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] text-center py-1"
                         />
                       </div>
 
                       <div className="flex-1">
-                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase block mb-1">
+                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase tracking-wider block mb-1">
                           Reps
                         </label>
                         <input
                           type="text"
                           value={item.reps}
-                          onChange={(e) => updateExercise(item.id, { reps: e.target.value })}
-                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-lg font-bold rounded focus:border-[#d2f000] text-center py-1"
+                          onChange={(e) => handleUpdateExercise(item.id, { reps: e.target.value })}
+                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-xl font-bold rounded focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] text-center py-1"
                         />
                       </div>
 
                       <div className="flex-1">
-                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase block mb-1">
+                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase tracking-wider block mb-1">
                           Descanso
                         </label>
                         <input
                           type="text"
                           value={item.restTime || ''}
-                          onChange={(e) => updateExercise(item.id, { restTime: e.target.value })}
+                          onChange={(e) => handleUpdateExercise(item.id, { restTime: e.target.value })}
                           placeholder="60s"
-                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-xs font-bold rounded focus:border-[#d2f000] text-center py-1.5"
+                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-sm font-bold rounded focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] text-center py-1.5"
                         />
                       </div>
                     </div>
 
+                    {/* Notes Toggle */}
                     <button
                       onClick={() => toggleNotes(item.id)}
-                      className="flex items-center gap-1 text-[10px] text-[#c6c9ab] hover:text-[#d2f000] transition-colors font-semibold uppercase self-start mt-1"
+                      className="flex items-center gap-1 text-[10px] text-[#c6c9ab] hover:text-[#d2f000] transition-colors font-semibold uppercase tracking-wider self-start"
                     >
                       <span className="material-symbols-outlined text-[14px]">
                         {expandedNotes.has(item.id) ? 'expand_less' : 'note_add'}
                       </span>
                       {expandedNotes.has(item.id) ? 'Ocultar Notas' : 'Notas'}
+                      {item.notes && !expandedNotes.has(item.id) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#d2f000]"></span>
+                      )}
                     </button>
 
                     {expandedNotes.has(item.id) && (
                       <textarea
                         value={item.notes || ''}
-                        onChange={(e) => updateExercise(item.id, { notes: e.target.value })}
-                        placeholder="Notas para el alumno..."
+                        onChange={(e) => handleUpdateExercise(item.id, { notes: e.target.value })}
+                        placeholder="Notas del entrenador..."
                         rows={2}
                         className="w-full bg-[#051424] border border-[#454932] text-[#d4e4fa] text-xs rounded py-2 px-2 focus:border-[#d2f000] focus:outline-none resize-none"
                       />
@@ -474,120 +668,35 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
               ))}
             </div>
           )}
-        </div>
-      )}
+        </section>
+      </div>
 
-      {/* MODAL: ASSIGN ROUTINE TO STUDENT */}
-      {assignModalRoutine && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#122131] border border-[#454932] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-headline text-lg font-bold text-white flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#d2f000]">send</span>
-                Asignar Rutina a Alumno
-              </h3>
-              <button
-                onClick={() => setAssignModalRoutine(null)}
-                className="text-[#c6c9ab] hover:text-white"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="bg-[#051424] p-3 rounded-xl border border-[#454932]/50 mb-4">
-              <p className="text-xs text-[#c6c9ab] uppercase font-bold">Rutina a enviar:</p>
-              <p className="text-base font-bold text-white">{assignModalRoutine.name}</p>
-              <p className="text-xs text-[#d2f000]">{assignModalRoutine.exercises.length} ejercicios incluidos</p>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
-                Selecciona el Alumno:
-              </label>
-              {students.length === 0 ? (
-                <p className="text-xs text-[#ffb4ab]">No tienes alumnos registrados.</p>
-              ) : (
-                <select
-                  value={selectedStudentForAssign}
-                  onChange={(e) => setSelectedStudentForAssign(e.target.value)}
-                  className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
-                >
-                  {students.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.name} — ({st.level})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setAssignModalRoutine(null)}
-                className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmAssign}
-                disabled={!selectedStudentForAssign}
-                className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1 disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-base">send</span>
-                Confirmar y Asignar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE ROUTINE CONFIRMATION MODAL */}
+      {/* Delete Exercise Confirmation Modal */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
           <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
-            <h3 className="font-headline text-lg font-bold text-white mb-2">¿Eliminar esta rutina guardada?</h3>
-            <p className="text-xs text-[#c6c9ab] mb-6">Esta acción no se puede deshacer. Se borrará de la nube.</p>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-[#ffb4ab]/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[#ffb4ab]">delete</span>
+              </div>
+              <h3 className="font-headline text-lg font-bold text-white">¿Eliminar ejercicio?</h3>
+            </div>
+            <p className="text-sm text-[#c6c9ab] mb-6">
+              Esta acción eliminará el ejercicio de la rutina actual. Puedes volver a añadirlo desde el catálogo.
+            </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="px-4 py-2 text-xs text-[#c6c9ab] hover:text-white"
+                className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white font-medium"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => {
-                  onDeleteRoutine(confirmDeleteId);
-                  setConfirmDeleteId(null);
-                }}
-                className="bg-[#ffb4ab] text-[#690005] font-bold text-xs px-4 py-2 rounded-lg hover:opacity-90"
+                onClick={() => handleRemoveExercise(confirmDeleteId)}
+                className="bg-[#ffb4ab] text-[#690005] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1"
               >
+                <span className="material-symbols-outlined text-base">delete</span>
                 Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE EXERCISE FROM EDITOR MODAL */}
-      {confirmDeleteExId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
-            <h3 className="font-headline text-lg font-bold text-white mb-2">¿Quitar ejercicio de la rutina?</h3>
-            <div className="flex justify-end gap-3 mt-4">
-              <button
-                onClick={() => setConfirmDeleteExId(null)}
-                className="px-4 py-2 text-xs text-[#c6c9ab] hover:text-white"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  removeExercise(confirmDeleteExId);
-                  setConfirmDeleteExId(null);
-                }}
-                className="bg-[#ffb4ab] text-[#690005] font-bold text-xs px-4 py-2 rounded-lg"
-              >
-                Quitar
               </button>
             </div>
           </div>
