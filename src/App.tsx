@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AddExerciseModal } from './components/AddExerciseModal';
 import { AlumnosView } from './components/AlumnosView';
 import { BottomNav } from './components/BottomNav';
@@ -8,18 +8,10 @@ import { Header } from './components/Header';
 import { ProgresoView } from './components/ProgresoView';
 import { ShareModal } from './components/ShareModal';
 import { ToastProvider, useToast } from './components/ToastContext';
-import { INITIAL_EXERCISES, INITIAL_STUDENTS } from './data/mockData';
-import { Exercise, RoutineExercise, Student, TabType } from './types';
+import { INITIAL_STUDENTS } from './data/mockData';
+import { getInitialExercisesCombined } from './data/allExercises';
+import { Exercise, RoutineAssignment, SavedRoutine, Student, TabType } from './types';
 import { sheetsApi } from './api/googleSheets';
-
-// Hook para guardar automáticamente tras dejar de escribir
-function useDebouncedEffect(effect: () => void, deps: any[], delay: number) {
-  useEffect(() => {
-    const handler = setTimeout(() => effect(), delay);
-    return () => clearTimeout(handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, delay]);
-}
 
 function AppContent() {
   const { addToast } = useToast();
@@ -31,13 +23,13 @@ function AppContent() {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
-  const [routineTitle, setRoutineTitle] = useState('Lunes: Día de Empuje');
+  const [savedRoutines, setSavedRoutines] = useState<SavedRoutine[]>([]);
+  const [assignments, setAssignments] = useState<RoutineAssignment[]>([]);
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  // Carga inicial de datos desde Google Sheets
+  // Carga inicial de datos desde Google Sheets y Dataset
   useEffect(() => {
     async function loadData() {
       try {
@@ -45,36 +37,42 @@ function AppContent() {
         
         const loadedStudents = db.filter((r: any) => r.type === 'student').map((r: any) => r.data as Student);
         const loadedExercises = db.filter((r: any) => r.type === 'exercise').map((r: any) => r.data as Exercise);
-        
-        // Busca si hay una rutina guardada
-        const globalRoutineRecord = db.find((r: any) => r.type === 'routine' && r.id === 'global_routine')?.data;
-        const routineTitleRecord = db.find((r: any) => r.type === 'routine_title' && r.id === 'global_title')?.data;
+        const loadedRoutines = db.filter((r: any) => r.type === 'saved_routine').map((r: any) => r.data as SavedRoutine);
+        const loadedAssignments = db.filter((r: any) => r.type === 'assignment').map((r: any) => r.data as RoutineAssignment);
 
-        // Si la base de datos está vacía, usamos los datos iniciales
+        // Estudiantes
         if (loadedStudents.length > 0) {
           setStudents(loadedStudents);
           setSelectedStudent(loadedStudents[0]);
         } else {
           setStudents(INITIAL_STUDENTS);
-          setSelectedStudent(INITIAL_STUDENTS[3]); // Alex Chen
+          setSelectedStudent(INITIAL_STUDENTS[3]);
         }
 
+        // Combinar ejercicios iniciales + dataset completo + custom creados
+        const baseCombined = getInitialExercisesCombined();
         if (loadedExercises.length > 0) {
-          setExercises(loadedExercises);
+          // Agregar custom exercises subidos previamente por el usuario
+          const customOnly = loadedExercises.filter((e) => !baseCombined.some((b) => b.id === e.id));
+          setExercises([...customOnly, ...baseCombined]);
         } else {
-          setExercises(INITIAL_EXERCISES);
+          setExercises(baseCombined);
         }
 
-        if (globalRoutineRecord) setRoutineExercises(globalRoutineRecord);
-        if (routineTitleRecord) setRoutineTitle(routineTitleRecord.title);
+        // Rutinas Guardadas y Asignaciones
+        if (loadedRoutines.length > 0) {
+          setSavedRoutines(loadedRoutines);
+        }
+        if (loadedAssignments.length > 0) {
+          setAssignments(loadedAssignments);
+        }
 
-      } catch(err) {
+      } catch (err) {
         console.error("Error al cargar la app:", err);
         addToast('Error de conexión. Trabajando offline.', 'error');
-        // Fallback a inicial
         setStudents(INITIAL_STUDENTS);
         setSelectedStudent(INITIAL_STUDENTS[3]);
-        setExercises(INITIAL_EXERCISES);
+        setExercises(getInitialExercisesCombined());
       } finally {
         setIsLoading(false);
       }
@@ -82,20 +80,50 @@ function AppContent() {
     loadData();
   }, [addToast]);
 
-  // Guardado automático de la Rutina (con Debounce para no saturar Google Sheets)
-  const isFirstRender = useRef(true);
-  useDebouncedEffect(() => {
-    if (isLoading) return;
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    sheetsApi.saveRecord('global_routine', 'routine', routineExercises).catch(console.error);
-    sheetsApi.saveRecord('global_title', 'routine_title', { title: routineTitle }).catch(console.error);
-  }, [routineExercises, routineTitle], 1500);
+  // ----------------------------------------------------
+  // Handlers para Rutinas Guardadas & Asignación
+  // ----------------------------------------------------
+
+  const handleSaveRoutine = useCallback((routine: SavedRoutine) => {
+    setSavedRoutines((prev) => {
+      const exists = prev.some((r) => r.id === routine.id);
+      if (exists) {
+        return prev.map((r) => (r.id === routine.id ? routine : r));
+      }
+      return [routine, ...prev];
+    });
+
+    addToast(`Rutina "${routine.name}" guardada en la nube`, 'success');
+    sheetsApi.saveRecord(routine.id, 'saved_routine', routine).catch(console.error);
+  }, [addToast]);
+
+  const handleDeleteRoutine = useCallback((routineId: string) => {
+    setSavedRoutines((prev) => prev.filter((r) => r.id !== routineId));
+    addToast('Rutina eliminada de la nube', 'info');
+    sheetsApi.deleteRecord(routineId, 'saved_routine').catch(console.error);
+  }, [addToast]);
+
+  const handleAssignRoutine = useCallback((routine: SavedRoutine, studentId: string) => {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return;
+
+    const newAssignment: RoutineAssignment = {
+      id: `as-${Date.now()}`,
+      routineId: routine.id,
+      routineName: routine.name,
+      studentId: student.id,
+      studentName: student.name,
+      assignedAt: new Date().toISOString(),
+      exercises: routine.exercises,
+    };
+
+    setAssignments((prev) => [newAssignment, ...prev]);
+    addToast(`Rutina "${routine.name}" asignada a ${student.name}`, 'success');
+    sheetsApi.saveRecord(newAssignment.id, 'assignment', newAssignment).catch(console.error);
+  }, [students, addToast]);
 
   // ----------------------------------------------------
-  // Handlers
+  // Handlers para Alumnos y Ejercicios
   // ----------------------------------------------------
 
   const handleSelectStudent = useCallback((student: Student) => {
@@ -105,39 +133,7 @@ function AppContent() {
 
   const handleCreateNewProgram = useCallback((student: Student) => {
     setSelectedStudent(student);
-    setRoutineTitle(`Nuevo Plan - ${student.name}`);
     setActiveTab('creador');
-  }, []);
-
-  const handleAddExerciseToRoutine = useCallback((exercise: Exercise) => {
-    const newRoutineEx: RoutineExercise = {
-      id: `re-${Date.now()}-${Math.random()}`,
-      exerciseId: exercise.id,
-      exerciseName: exercise.name,
-      targetMuscles: exercise.secondaryMuscles,
-      imageUrl: exercise.imageUrl,
-      sets: exercise.defaultSets || 3,
-      reps: exercise.defaultReps || '10',
-      restTime: '60 seg',
-      notes: '',
-    };
-    setRoutineExercises((prev) => [...prev, newRoutineEx]);
-    addToast(`"${exercise.name}" añadido a la rutina`, 'success');
-  }, [addToast]);
-
-  const handleUpdateExercise = useCallback((id: string, updates: Partial<RoutineExercise>) => {
-    setRoutineExercises((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
-  }, []);
-
-  const handleRemoveExercise = useCallback((id: string) => {
-    setRoutineExercises((prev) => prev.filter((item) => item.id !== id));
-    addToast('Ejercicio eliminado de la rutina', 'info');
-  }, [addToast]);
-
-  const handleReorderExercises = useCallback((reordered: RoutineExercise[]) => {
-    setRoutineExercises(reordered);
   }, []);
 
   const handleAddStudent = useCallback((name: string) => {
@@ -175,17 +171,21 @@ function AppContent() {
     setStudents((prev) => [newStudent, ...prev]);
     setSelectedStudent(newStudent);
     addToast(`Alumno "${name}" guardado en la nube`, 'success');
-    
-    // Guardar en Google Sheets individualmente
     sheetsApi.saveRecord(newStudent.id, 'student', newStudent).catch(console.error);
   }, [addToast]);
 
   const handleAddCustomExercise = useCallback((exercise: Exercise) => {
     setExercises((prev) => [exercise, ...prev]);
     addToast(`Ejercicio "${exercise.name}" subido a la nube`, 'success');
-    
-    // Guardar en Google Sheets individualmente
     sheetsApi.saveRecord(exercise.id, 'exercise', exercise).catch(console.error);
+  }, [addToast]);
+
+  const handleAddExerciseToRoutineFromCatalog = useCallback((exercise: Exercise) => {
+    // Si la función global existe (en modo Editor de CreadorView), invocarla
+    if ((window as any).__addExerciseToEditor) {
+      (window as any).__addExerciseToEditor(exercise);
+      addToast(`"${exercise.name}" añadido a la rutina`, 'success');
+    }
   }, [addToast]);
 
   // Pantalla de Carga Inicial
@@ -194,7 +194,7 @@ function AppContent() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#051424] text-[#d4e4fa]">
         <div className="w-16 h-16 border-4 border-[#454932] border-t-[#d2f000] rounded-full animate-spin mb-6"></div>
         <h1 className="font-headline text-2xl font-extrabold text-white tracking-tighter mb-2">TRAINPRO</h1>
-        <p className="text-[#c6c9ab] text-sm animate-pulse">Sincronizando con Google Sheets...</p>
+        <p className="text-[#c6c9ab] text-sm animate-pulse">Sincronizando rutinas y catálogo en la nube...</p>
       </div>
     );
   }
@@ -222,29 +222,26 @@ function AppContent() {
             selectedStudent={selectedStudent}
             onSelectStudent={setSelectedStudent}
             onCreateNewProgram={handleCreateNewProgram}
+            assignments={assignments}
           />
         )}
 
         {activeTab === 'ejercicios' && (
           <EjerciciosView
             exercises={exercises}
-            onAddExerciseToRoutine={handleAddExerciseToRoutine}
+            onAddExerciseToRoutine={handleAddExerciseToRoutineFromCatalog}
             onAddCustomExercise={handleAddCustomExercise}
           />
         )}
 
-        {activeTab === 'creador' && selectedStudent && (
+        {activeTab === 'creador' && (
           <CreadorView
             students={students}
-            selectedStudent={selectedStudent}
-            onSelectStudent={setSelectedStudent}
-            routineExercises={routineExercises}
-            onUpdateExercise={handleUpdateExercise}
-            onRemoveExercise={handleRemoveExercise}
-            onReorderExercises={handleReorderExercises}
+            savedRoutines={savedRoutines}
+            onSaveRoutine={handleSaveRoutine}
+            onDeleteRoutine={handleDeleteRoutine}
+            onAssignRoutine={handleAssignRoutine}
             onOpenAddModal={() => setIsAddModalOpen(true)}
-            routineTitle={routineTitle}
-            setRoutineTitle={setRoutineTitle}
           />
         )}
       </div>
@@ -257,7 +254,7 @@ function AppContent() {
           exercises={exercises}
           onClose={() => setIsAddModalOpen(false)}
           onSelectExercise={(ex) => {
-            handleAddExerciseToRoutine(ex);
+            handleAddExerciseToRoutineFromCatalog(ex);
             setIsAddModalOpen(false);
           }}
         />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useToast } from './ToastContext';
 import { Exercise, MuscleCategory } from '../types';
 
@@ -18,14 +18,20 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedExerciseModal, setSelectedExerciseModal] = useState<Exercise | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [hoveredExerciseId, setHoveredExerciseId] = useState<string | null>(null);
+
+  // Pagination state for performance with 1300+ items
+  const [displayCount, setDisplayCount] = useState(36);
 
   // Create exercise form state
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState<Exclude<MuscleCategory, 'Todos'>>('Pecho');
   const [newMuscles, setNewMuscles] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [newGifUrl, setNewGifUrl] = useState('');
   const [newSets, setNewSets] = useState(3);
-  const [newReps, setNewReps] = useState('10');
+  const [newReps, setNewReps] = useState('10-12');
 
   const categories: MuscleCategory[] = [
     'Todos',
@@ -37,19 +43,30 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
     'Core',
   ];
 
-  const filteredExercises = exercises.filter((ex) => {
-    const matchesCategory = selectedCategory === 'Todos' || ex.category === selectedCategory;
-    const matchesSearch =
-      ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ex.secondaryMuscles.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredExercises = useMemo(() => {
+    return exercises.filter((ex) => {
+      const matchesCategory = selectedCategory === 'Todos' || ex.category === selectedCategory;
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        ex.name.toLowerCase().includes(query) ||
+        ex.secondaryMuscles.toLowerCase().includes(query) ||
+        (ex.equipment && ex.equipment.toLowerCase().includes(query));
+      return matchesCategory && matchesSearch;
+    });
+  }, [exercises, selectedCategory, searchQuery]);
+
+  const visibleExercises = useMemo(() => {
+    return filteredExercises.slice(0, displayCount);
+  }, [filteredExercises, displayCount]);
 
   // Count exercises by category
-  const categoryCounts = categories.reduce((acc, cat) => {
-    acc[cat] = cat === 'Todos' ? exercises.length : exercises.filter(e => e.category === cat).length;
-    return acc;
-  }, {} as Record<string, number>);
+  const categoryCounts = useMemo(() => {
+    return categories.reduce((acc, cat) => {
+      acc[cat] = cat === 'Todos' ? exercises.length : exercises.filter((e) => e.category === cat).length;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [exercises, categories]);
 
   const handleQuickAdd = (e: React.MouseEvent, exercise: Exercise) => {
     e.stopPropagation();
@@ -60,12 +77,17 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
     e.preventDefault();
     if (!newName.trim()) return;
 
+    const defaultImg =
+      newImageUrl.trim() ||
+      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80';
+
     const newExercise: Exercise = {
       id: `ex-custom-${Date.now()}`,
       name: newName.trim(),
       category: newCategory,
       secondaryMuscles: newMuscles.trim() || newCategory,
-      imageUrl: `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80`,
+      imageUrl: defaultImg,
+      gifUrl: newGifUrl.trim() || undefined,
       description: newDescription.trim() || `Ejercicio personalizado: ${newName.trim()}.`,
       defaultSets: newSets,
       defaultReps: newReps,
@@ -75,14 +97,16 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
     setNewName('');
     setNewMuscles('');
     setNewDescription('');
+    setNewImageUrl('');
+    setNewGifUrl('');
     setNewSets(3);
-    setNewReps('10');
+    setNewReps('10-12');
     setIsCreateModalOpen(false);
   };
 
   return (
     <main className="flex-1 overflow-y-auto pb-32">
-      {/* Search Section */}
+      {/* Search & Header Section */}
       <div className="px-4 md:px-16 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
@@ -90,12 +114,12 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
               Catálogo de Ejercicios
             </h2>
             <p className="text-[#c6c9ab] text-sm">
-              {exercises.length} ejercicios disponibles · Filtra por grupo muscular
+              <span className="text-[#d2f000] font-bold">{exercises.length}</span> ejercicios disponibles con GIFs animados
             </p>
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)] self-start md:self-auto"
+            className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)] self-start md:self-auto"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Crear Ejercicio
@@ -109,13 +133,19 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar ejercicios..."
-            className="w-full bg-[#122131] border border-[#454932] text-[#d4e4fa] font-medium rounded-lg py-3 pl-12 pr-4 focus:outline-none focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] transition-colors placeholder-[#c6c9ab] text-sm shadow-sm"
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setDisplayCount(36); // Reset pagination on search
+            }}
+            placeholder="Buscar por nombre, músculo o equipamiento (ej: mancuerna, squat)..."
+            className="w-full bg-[#122131] border border-[#454932] text-[#d4e4fa] font-medium rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] transition-colors placeholder-[#c6c9ab] text-sm shadow-sm"
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                setSearchQuery('');
+                setDisplayCount(36);
+              }}
               className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#c6c9ab] hover:text-white"
             >
               <span className="material-symbols-outlined text-[18px]">close</span>
@@ -130,7 +160,10 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
           {categories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              onClick={() => {
+                setSelectedCategory(cat);
+                setDisplayCount(36);
+              }}
               className={`shrink-0 px-4 py-1.5 rounded-full font-semibold text-xs transition-all flex items-center gap-1.5 ${
                 selectedCategory === cat
                   ? 'bg-[#d2f000] text-[#191e00] border border-[#d2f000] shadow-md'
@@ -138,7 +171,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
               }`}
             >
               {cat}
-              <span className={`text-[10px] font-bold ${selectedCategory === cat ? 'text-[#191e00]/60' : 'text-[#c6c9ab]/60'}`}>
+              <span className={`text-[10px] font-bold ${selectedCategory === cat ? 'text-[#191e00]/70' : 'text-[#c6c9ab]/70'}`}>
                 {categoryCounts[cat]}
               </span>
             </button>
@@ -149,59 +182,87 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
       {/* Exercise Grid */}
       <div className="px-4 md:px-16 py-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-          {filteredExercises.map((exercise) => (
-            <div
-              key={exercise.id}
-              onClick={() => setSelectedExerciseModal(exercise)}
-              className="group relative rounded-xl overflow-hidden bg-[#122131] border border-[#454932] aspect-[4/3] active:scale-[0.98] transition-all duration-200 cursor-pointer shadow-lg hover:border-[#d2f000]/70"
-            >
-              <img
-                src={exercise.imageUrl}
-                alt={exercise.name}
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 exercise-card-overlay flex flex-col justify-end p-4">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-[#1c2b3c]/80 text-[#d2f000] font-bold text-[10px] mb-1 inline-block uppercase tracking-wider backdrop-blur-sm border border-[#454932]">
-                      {exercise.category}
-                    </span>
-                    <h3 className="font-headline text-lg font-bold text-white group-hover:text-[#d2f000] transition-colors">
-                      {exercise.name}
-                    </h3>
-                    <p className="text-[11px] text-[#c6c9ab] mt-0.5">{exercise.secondaryMuscles}</p>
+          {visibleExercises.map((exercise) => {
+            const isHovered = hoveredExerciseId === exercise.id;
+            const currentSrc = isHovered && exercise.gifUrl ? exercise.gifUrl : exercise.imageUrl;
+
+            return (
+              <div
+                key={exercise.id}
+                onClick={() => setSelectedExerciseModal(exercise)}
+                onMouseEnter={() => setHoveredExerciseId(exercise.id)}
+                onMouseLeave={() => setHoveredExerciseId(null)}
+                className="group relative rounded-2xl overflow-hidden bg-[#122131] border border-[#454932] aspect-[4/3] active:scale-[0.98] transition-all duration-200 cursor-pointer shadow-lg hover:border-[#d2f000]/70"
+              >
+                <img
+                  src={currentSrc}
+                  alt={exercise.name}
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 exercise-card-overlay flex flex-col justify-end p-4">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#1c2b3c]/90 text-[#d2f000] font-bold text-[10px] uppercase tracking-wider backdrop-blur-sm border border-[#454932]">
+                          {exercise.category}
+                        </span>
+                        {exercise.gifUrl && (
+                          <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-bold text-[9px] uppercase tracking-wider border border-green-500/30 flex items-center gap-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                            GIF
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-headline text-base font-bold text-white group-hover:text-[#d2f000] transition-colors leading-snug">
+                        {exercise.name}
+                      </h3>
+                      <p className="text-[11px] text-[#c6c9ab] mt-0.5 truncate">{exercise.secondaryMuscles}</p>
+                    </div>
+                    <button
+                      onClick={(e) => handleQuickAdd(e, exercise)}
+                      className="p-1 text-[#d2f000] hover:scale-125 transition-transform active:scale-95 shrink-0"
+                      title="Añadir a la rutina"
+                    >
+                      <span className="material-symbols-outlined text-3xl">add_circle</span>
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => handleQuickAdd(e, exercise)}
-                    className="p-1 text-[#d2f000] hover:scale-125 transition-transform active:scale-95"
-                    title="Añadir a la rutina"
-                  >
-                    <span className="material-symbols-outlined text-3xl">add_circle</span>
-                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {filteredExercises.length === 0 && (
-            <div className="col-span-full text-center py-12 text-[#c6c9ab] bg-[#122131]/40 rounded-xl border border-dashed border-[#454932]">
+            <div className="col-span-full text-center py-12 text-[#c6c9ab] bg-[#122131]/40 rounded-2xl border border-dashed border-[#454932]">
               <span className="material-symbols-outlined text-4xl mb-2">fitness_center</span>
               <p className="text-base font-semibold">No se encontraron ejercicios</p>
               <p className="text-xs text-[#c6c9ab]">Intenta seleccionar otra categoría o cambiar el término de búsqueda.</p>
             </div>
           )}
         </div>
+
+        {/* Load More Button */}
+        {filteredExercises.length > displayCount && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={() => setDisplayCount((prev) => prev + 36)}
+              className="bg-[#122131] border border-[#454932] text-white hover:border-[#d2f000] hover:text-[#d2f000] font-bold text-xs px-6 py-3 rounded-xl transition-all shadow flex items-center gap-2"
+            >
+              Cargar Más Ejercicios ({filteredExercises.length - displayCount} restantes)
+              <span className="material-symbols-outlined text-base">expand_more</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Detail Modal */}
       {selectedExerciseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-[#122131] border border-[#454932] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-in">
-            <div className="relative h-56">
+            <div className="relative h-64 bg-black">
               <img
-                src={selectedExerciseModal.imageUrl}
+                src={selectedExerciseModal.gifUrl || selectedExerciseModal.imageUrl}
                 alt={selectedExerciseModal.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#122131] via-transparent to-black/40" />
               <button
@@ -220,7 +281,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                 {selectedExerciseModal.name}
               </h3>
               <p className="text-xs text-[#c6c9ab] mb-4">
-                Músculos secundarios: <span className="text-white">{selectedExerciseModal.secondaryMuscles}</span>
+                Músculos / Target: <span className="text-white">{selectedExerciseModal.secondaryMuscles}</span>
               </p>
 
               <p className="text-sm text-[#d4e4fa] leading-relaxed mb-6">
@@ -228,7 +289,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                   'Ejercicio de alto rendimiento enfocado en estímulo muscular y sobrecarga progresiva.'}
               </p>
 
-              <div className="flex justify-between items-center bg-[#051424] p-3 rounded-lg mb-6 border border-[#454932]/40">
+              <div className="flex justify-between items-center bg-[#051424] p-3 rounded-xl mb-6 border border-[#454932]/40">
                 <div>
                   <span className="text-[10px] text-[#c6c9ab] uppercase font-bold">Series Recomendadas</span>
                   <p className="text-base font-bold text-white">{selectedExerciseModal.defaultSets} series</p>
@@ -242,7 +303,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
               <div className="flex gap-3">
                 <button
                   onClick={() => setSelectedExerciseModal(null)}
-                  className="flex-1 py-2.5 rounded-lg border border-[#454932] text-sm text-[#c6c9ab] hover:text-white"
+                  className="flex-1 py-2.5 rounded-xl border border-[#454932] text-sm text-[#c6c9ab] hover:text-white font-semibold"
                 >
                   Cerrar
                 </button>
@@ -251,7 +312,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                     handleQuickAdd(e, selectedExerciseModal);
                     setSelectedExerciseModal(null);
                   }}
-                  className="flex-1 py-2.5 rounded-lg bg-[#d2f000] text-[#191e00] font-bold text-sm hover:opacity-90 flex items-center justify-center gap-1"
+                  className="flex-1 py-2.5 rounded-xl bg-[#d2f000] text-[#191e00] font-bold text-sm hover:opacity-90 flex items-center justify-center gap-1 shadow"
                 >
                   <span className="material-symbols-outlined text-base">add</span>
                   Añadir a Rutina
@@ -270,9 +331,9 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
               <div>
                 <h3 className="font-headline text-lg font-bold text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#d2f000]">add_circle</span>
-                  Crear Ejercicio
+                  Crear Ejercicio Personalizado
                 </h3>
-                <p className="text-xs text-[#c6c9ab]">Añade un ejercicio personalizado al catálogo</p>
+                <p className="text-xs text-[#c6c9ab]">Añade un nuevo ejercicio al catálogo con su imagen o GIF</p>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
@@ -282,7 +343,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateExercise} className="p-5 space-y-4">
+            <form onSubmit={handleCreateExercise} className="p-5 space-y-3.5 max-h-[80vh] overflow-y-auto">
               <div>
                 <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
                   Nombre del Ejercicio *
@@ -292,7 +353,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                   required
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Ej. Sentadilla Frontal"
+                  placeholder="Ej. Press Inclinado con Mancuernas"
                   className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
                 />
               </div>
@@ -307,20 +368,20 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                     onChange={(e) => setNewCategory(e.target.value as Exclude<MuscleCategory, 'Todos'>)}
                     className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
                   >
-                    {categories.filter(c => c !== 'Todos').map(cat => (
+                    {categories.filter((c) => c !== 'Todos').map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
-                    Músculos
+                    Músculos Principales
                   </label>
                   <input
                     type="text"
                     value={newMuscles}
                     onChange={(e) => setNewMuscles(e.target.value)}
-                    placeholder="Ej. Cuádriceps, Core"
+                    placeholder="Ej. Pectoral Superior, Tríceps"
                     className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
                   />
                 </div>
@@ -328,12 +389,38 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
-                  Descripción
+                  URL de Imagen (Thumbnail)
+                </label>
+                <input
+                  type="url"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  placeholder="https://ejemplo.com/imagen.jpg (opcional)"
+                  className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                  URL de GIF Animado
+                </label>
+                <input
+                  type="url"
+                  value={newGifUrl}
+                  onChange={(e) => setNewGifUrl(e.target.value)}
+                  placeholder="https://ejemplo.com/animacion.gif (opcional)"
+                  className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                  Instrucciones o Descripción
                 </label>
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Descripción del ejercicio..."
+                  placeholder="Detalles sobre técnica o postura..."
                   rows={2}
                   className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm resize-none"
                 />
@@ -361,7 +448,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                     type="text"
                     value={newReps}
                     onChange={(e) => setNewReps(e.target.value)}
-                    placeholder="Ej. 8-10"
+                    placeholder="Ej. 10-12"
                     className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
                   />
                 </div>
@@ -371,16 +458,16 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white"
+                  className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white font-medium"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1"
+                  className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1 shadow"
                 >
                   <span className="material-symbols-outlined text-base">save</span>
-                  Crear Ejercicio
+                  Guardar Ejercicio
                 </button>
               </div>
             </form>

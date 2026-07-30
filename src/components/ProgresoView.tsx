@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Student } from '../types';
+import { RoutineAssignment, Student } from '../types';
 
 interface ProgresoViewProps {
   students: Student[];
   selectedStudent: Student;
   onSelectStudent: (student: Student) => void;
   onCreateNewProgram: (student: Student) => void;
+  assignments?: RoutineAssignment[];
 }
 
 type LiftType = 'Sentadilla' | 'Press de Banca' | 'Peso Muerto' | 'OHP';
@@ -15,9 +16,13 @@ export const ProgresoView: React.FC<ProgresoViewProps> = ({
   selectedStudent,
   onSelectStudent,
   onCreateNewProgram,
+  assignments = [],
 }) => {
   const [selectedLift, setSelectedLift] = useState<LiftType>('Sentadilla');
   const [hoveredPoint, setHoveredPoint] = useState<{ index: number; val: number } | null>(null);
+
+  // Filter assignments for selected student
+  const studentAssignments = assignments.filter((a) => a.studentId === selectedStudent.id);
 
   const liftData = selectedStudent.oneRepMax[selectedLift] || [100, 110, 120, 130, 140];
   const xLabels = ['S1', 'S4', 'S8', 'S12', 'S16'];
@@ -86,6 +91,64 @@ export const ProgresoView: React.FC<ProgresoViewProps> = ({
           <span className="material-symbols-outlined text-[18px]">add</span>
           Nuevo Programa
         </button>
+      </div>
+
+      {/* Assigned Routines Section */}
+      <div className="mb-8">
+        <h3 className="font-headline text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <span className="material-symbols-outlined text-[#d2f000]">assignment_turned_in</span>
+          Rutinas Asignadas ({studentAssignments.length})
+        </h3>
+
+        {studentAssignments.length === 0 ? (
+          <div className="bg-[#122131]/40 border border-dashed border-[#454932] rounded-xl p-6 text-center">
+            <p className="text-sm text-[#c6c9ab]">No hay rutinas asignadas a este alumno aún.</p>
+            <p className="text-xs text-[#c6c9ab]/70 mt-1">
+              Asigna una rutina guardada desde la pestaña Creador.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {studentAssignments.map((assign) => (
+              <div key={assign.id} className="bg-[#122131] border border-[#454932] rounded-xl p-5 shadow-lg">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-bold text-[10px] uppercase tracking-wider mb-1 inline-block border border-green-500/30">
+                      Asignada {new Date(assign.assignedAt).toLocaleDateString('es-ES')}
+                    </span>
+                    <h4 className="font-headline text-base font-bold text-white">
+                      {assign.routineName}
+                    </h4>
+                  </div>
+                  <button
+                    onClick={() => window.print()}
+                    className="text-[#c6c9ab] hover:text-white p-1"
+                    title="Imprimir / Exportar"
+                  >
+                    <span className="material-symbols-outlined text-base">print</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2 mt-3 pt-3 border-t border-[#454932]/40">
+                  {assign.exercises.map((ex, idx) => (
+                    <div key={ex.id || idx} className="flex items-center justify-between bg-[#051424] p-2.5 rounded-lg text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <img src={ex.gifUrl || ex.imageUrl} alt={ex.exerciseName} className="w-8 h-8 rounded object-cover shrink-0" />
+                        <div className="truncate">
+                          <p className="font-semibold text-white truncate">{ex.exerciseName}</p>
+                          <p className="text-[10px] text-[#c6c9ab]">{ex.targetMuscles}</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold text-[#d2f000]">{ex.sets} series</span> × <span className="font-medium text-white">{ex.reps}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Quick Stats Bento */}

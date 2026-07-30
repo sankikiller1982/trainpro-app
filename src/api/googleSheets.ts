@@ -1,5 +1,7 @@
 export const API_URL = 'https://script.google.com/macros/s/AKfycbwF48CoXa8R55U2SeeTIxh8wXwAJJILtrScVijmWVBsb2M9VhjuvcGxZ2D9T36NInl4Lw/exec';
 
+export type RecordType = 'student' | 'exercise' | 'routine' | 'saved_routine' | 'assignment';
+
 export const sheetsApi = {
   async fetchAll() {
     try {
@@ -8,16 +10,15 @@ export const sheetsApi = {
       return await res.json();
     } catch (error) {
       console.error('Error fetching data from Google Sheets:', error);
-      return []; // Devuelve un array vacío en caso de error de red
+      return [];
     }
   },
 
-  async saveRecord(id: string, type: 'student' | 'exercise' | 'routine', payload: any) {
+  async saveRecord(id: string, type: RecordType, payload: any) {
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: {
-          // Es crucial usar text/plain para evitar errores de preflight (CORS) con Apps Script
           'Content-Type': 'text/plain;charset=utf-8', 
         },
         body: JSON.stringify({
@@ -34,7 +35,7 @@ export const sheetsApi = {
     }
   },
 
-  async deleteRecord(id: string, type: 'student' | 'exercise' | 'routine') {
+  async deleteRecord(id: string, type: RecordType) {
     try {
       const res = await fetch(API_URL, {
         method: 'POST',

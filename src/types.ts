@@ -6,9 +6,12 @@ export interface Exercise {
   category: Exclude<MuscleCategory, 'Todos'>;
   secondaryMuscles: string;
   imageUrl: string;
+  gifUrl?: string;
   description?: string;
   defaultSets: number;
   defaultReps: string;
+  equipment?: string;
+  target?: string;
 }
 
 export interface RoutineExercise {
@@ -17,10 +20,30 @@ export interface RoutineExercise {
   exerciseName: string;
   targetMuscles: string;
   imageUrl: string;
+  gifUrl?: string;
   sets: number;
   reps: string;
   restTime?: string;
   notes?: string;
+}
+
+export interface SavedRoutine {
+  id: string;
+  name: string;
+  description?: string;
+  exercises: RoutineExercise[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoutineAssignment {
+  id: string;
+  routineId: string;
+  routineName: string;
+  studentId: string;
+  studentName: string;
+  assignedAt: string;
+  exercises: RoutineExercise[];
 }
 
 export interface ProgramHistoryItem {
@@ -52,6 +75,7 @@ export interface Student {
     [key in 'Sentadilla' | 'Press de Banca' | 'Peso Muerto' | 'OHP']: number[];
   };
   programHistory: ProgramHistoryItem[];
+  assignedRoutines?: RoutineAssignment[];
 }
 
 export type TabType = 'ejercicios' | 'creador' | 'alumnos' | 'progreso';
