@@ -175,6 +175,8 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
         if (ex.restTime) text += ` | Descanso: ${ex.restTime}`;
         text += `\n`;
         if (ex.notes) text += `   📝 ${ex.notes}\n`;
+        const gifSrc = ex.gifUrl || ex.imageUrl;
+        if (gifSrc) text += `   🎬 ${window.location.origin}${gifSrc}\n`;
         text += `\n`;
       });
     }

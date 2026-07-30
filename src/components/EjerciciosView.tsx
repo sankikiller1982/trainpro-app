@@ -324,6 +324,23 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                   <span className="material-symbols-outlined text-base">delete</span>
                 </button>
                 <button
+                  onClick={() => {
+                    const ex = selectedExerciseModal;
+                    const gifUrl = ex.gifUrl
+                      ? `${window.location.origin}${ex.gifUrl}`
+                      : null;
+                    let text = `🏋️ *${ex.name}*\n`;
+                    text += `🎯 Músculos: ${ex.secondaryMuscles}\n`;
+                    text += `📊 ${ex.defaultSets} series x ${ex.defaultReps}\n`;
+                    if (gifUrl) text += `🎬 Ver ejercicio: ${gifUrl}\n`;
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                  }}
+                  className="w-10 h-10 rounded-xl border border-[#d2f000]/40 text-[#d2f000] hover:bg-[#d2f000]/10 flex items-center justify-center shrink-0"
+                  title="Compartir ejercicio"
+                >
+                  <span className="material-symbols-outlined text-base">share</span>
+                </button>
+                <button
                   onClick={() => setSelectedExerciseModal(null)}
                   className="flex-1 py-2.5 rounded-xl border border-[#454932] text-sm text-[#c6c9ab] hover:text-white font-semibold"
                 >
