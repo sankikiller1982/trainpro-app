@@ -1,0 +1,6 @@
+{
+  "name": "TrainPro",
+  "description": "Plataforma de gestión de alumnos, catálogo de ejercicios, creador de rutinas y seguimiento de progreso de fuerza para entrenadores personales.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
