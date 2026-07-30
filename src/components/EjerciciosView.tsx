@@ -6,12 +6,14 @@ interface EjerciciosViewProps {
   exercises: Exercise[];
   onAddExerciseToRoutine: (exercise: Exercise) => void;
   onAddCustomExercise: (exercise: Exercise) => void;
+  onDeleteExercise: (exercise: Exercise) => void;
 }
 
 export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
   exercises,
   onAddExerciseToRoutine,
   onAddCustomExercise,
+  onDeleteExercise,
 }) => {
   const { addToast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<MuscleCategory>('Todos');
@@ -19,6 +21,7 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
   const [selectedExerciseModal, setSelectedExerciseModal] = useState<Exercise | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [hoveredExerciseId, setHoveredExerciseId] = useState<string | null>(null);
+  const [confirmDeleteExercise, setConfirmDeleteExercise] = useState<Exercise | null>(null);
 
   // Pagination state for performance with 1300+ items
   const [displayCount, setDisplayCount] = useState(36);
@@ -221,13 +224,22 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                       </h3>
                       <p className="text-[11px] text-[#c6c9ab] mt-0.5 truncate">{exercise.secondaryMuscles}</p>
                     </div>
-                    <button
-                      onClick={(e) => handleQuickAdd(e, exercise)}
-                      className="p-1 text-[#d2f000] hover:scale-125 transition-transform active:scale-95 shrink-0"
-                      title="Añadir a la rutina"
-                    >
-                      <span className="material-symbols-outlined text-3xl">add_circle</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteExercise(exercise); }}
+                        className="p-1 text-[#c6c9ab]/60 hover:text-[#ffb4ab] hover:scale-125 transition-all shrink-0"
+                        title="Eliminar ejercicio"
+                      >
+                        <span className="material-symbols-outlined text-xl">remove_circle</span>
+                      </button>
+                      <button
+                        onClick={(e) => handleQuickAdd(e, exercise)}
+                        className="p-1 text-[#d2f000] hover:scale-125 transition-transform active:scale-95 shrink-0"
+                        title="Añadir a la rutina"
+                      >
+                        <span className="material-symbols-outlined text-3xl">add_circle</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -303,7 +315,14 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmDeleteExercise(selectedExerciseModal)}
+                  className="w-10 h-10 rounded-xl border border-[#ffb4ab]/40 text-[#ffb4ab] hover:bg-[#ffb4ab]/10 flex items-center justify-center shrink-0"
+                  title="Eliminar ejercicio"
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                </button>
                 <button
                   onClick={() => setSelectedExerciseModal(null)}
                   className="flex-1 py-2.5 rounded-xl border border-[#454932] text-sm text-[#c6c9ab] hover:text-white font-semibold"
@@ -494,6 +513,45 @@ export const EjerciciosView: React.FC<EjerciciosViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteExercise && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-[#ffb4ab]/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[#ffb4ab]">delete</span>
+              </div>
+              <h3 className="font-headline text-lg font-bold text-white">¿Eliminar ejercicio?</h3>
+            </div>
+            <p className="text-sm text-[#c6c9ab] mb-2">
+              Vas a eliminar <span className="text-white font-semibold">{confirmDeleteExercise.name}</span> del catálogo.
+            </p>
+            <p className="text-xs text-[#c6c9ab]/70 mb-6">
+              Esta acción no afecta las rutinas que ya lo incluyen.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteExercise(null)}
+                className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteExercise(confirmDeleteExercise);
+                  setConfirmDeleteExercise(null);
+                  setSelectedExerciseModal(null);
+                }}
+                className="bg-[#ffb4ab] text-[#690005] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-base">delete</span>
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>
       )}

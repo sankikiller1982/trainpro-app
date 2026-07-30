@@ -180,6 +180,12 @@ function AppContent() {
     sheetsApi.saveRecord(exercise.id, 'exercise', exercise).catch(console.error);
   }, [addToast]);
 
+  const handleDeleteExercise = useCallback((exercise: Exercise) => {
+    setExercises((prev) => prev.filter((e) => e.id !== exercise.id));
+    addToast(`Ejercicio "${exercise.name}" eliminado del catálogo`, 'info');
+    sheetsApi.deleteRecord(exercise.id, 'exercise').catch(console.error);
+  }, [addToast]);
+
   const handleAddExerciseToRoutineFromCatalog = useCallback((exercise: Exercise) => {
     // Si la función global existe (en modo Editor de CreadorView), invocarla
     if ((window as any).__addExerciseToEditor) {
@@ -231,6 +237,7 @@ function AppContent() {
             exercises={exercises}
             onAddExerciseToRoutine={handleAddExerciseToRoutineFromCatalog}
             onAddCustomExercise={handleAddCustomExercise}
+            onDeleteExercise={handleDeleteExercise}
           />
         )}
 
