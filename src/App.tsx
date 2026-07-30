@@ -136,6 +136,20 @@ function AppContent() {
     setActiveTab('creador');
   }, []);
 
+  const handleDeleteStudent = useCallback((studentId: string) => {
+    setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    setSelectedStudent((prev) => (prev?.id === studentId ? null : prev));
+    addToast('Alumno eliminado', 'info');
+    sheetsApi.deleteRecord(studentId, 'student').catch(console.error);
+  }, [addToast]);
+
+  const handleUpdateStudent = useCallback((updated: Student) => {
+    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setSelectedStudent((prev) => (prev?.id === updated.id ? updated : prev));
+    addToast(`Alumno "${updated.name}" actualizado`, 'success');
+    sheetsApi.saveRecord(updated.id, 'student', updated).catch(console.error);
+  }, [addToast]);
+
   const handleAddStudent = useCallback((name: string) => {
     const newStudent: Student = {
       id: `st-${Date.now()}`,
@@ -219,6 +233,8 @@ function AppContent() {
             students={students}
             onSelectStudent={handleSelectStudent}
             onAddStudent={handleAddStudent}
+            onDeleteStudent={handleDeleteStudent}
+            onUpdateStudent={handleUpdateStudent}
           />
         )}
 

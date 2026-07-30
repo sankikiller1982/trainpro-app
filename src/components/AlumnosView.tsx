@@ -1,21 +1,41 @@
 import React, { useState } from 'react';
 import { Student } from '../types';
+import datasetExercises from '../data/datasetExercises.json';
 
 interface AlumnosViewProps {
   students: Student[];
   onSelectStudent: (student: Student) => void;
   onAddStudent: (name: string) => void;
+  onDeleteStudent: (studentId: string) => void;
+  onUpdateStudent: (student: Student) => void;
 }
 
 export const AlumnosView: React.FC<AlumnosViewProps> = ({
   students,
   onSelectStudent,
   onAddStudent,
+  onDeleteStudent,
+  onUpdateStudent,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingModalOpen, setIsAddingModalOpen] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentLevel, setNewStudentLevel] = useState('Nivel Principiante');
+
+  // Edit Modal
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
+  const [editLevel, setEditLevel] = useState('');
+  const [editBodyWeight, setEditBodyWeight] = useState(70);
+  const [editStatus, setEditStatus] = useState<Student['status']>('En Marcha');
+  const [editProgram, setEditProgram] = useState('');
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+
+  // Dataset avatar picker
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   const filteredStudents = students.filter((student) =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -155,9 +175,34 @@ export const AlumnosView: React.FC<AlumnosViewProps> = ({
                   }`}>{student.status || 'En Marcha'}</span>
                 </div>
               </div>
-              <span className="material-symbols-outlined text-[#c6c9ab] group-hover:text-[#d2f000] transition-colors">
-                chevron_right
-              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditName(student.name);
+                    setEditAvatarUrl(student.avatarUrl);
+                    setEditLevel(student.level);
+                    setEditBodyWeight(student.bodyWeightKg);
+                    setEditStatus(student.status || 'En Marcha');
+                    setEditProgram(student.currentProgram);
+                    setEditingStudent(student);
+                  }}
+                  className="w-8 h-8 rounded-lg bg-[#273647] hover:bg-[#d2f000]/20 text-[#c6c9ab] hover:text-[#d2f000] flex items-center justify-center transition-all"
+                  title="Editar alumno"
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(student);
+                  }}
+                  className="w-8 h-8 rounded-lg bg-[#273647] hover:bg-red-500/20 text-[#c6c9ab] hover:text-red-400 flex items-center justify-center transition-all"
+                  title="Eliminar alumno"
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 bg-[#051424] rounded-lg p-3 border border-[#454932]/30">
@@ -225,6 +270,262 @@ export const AlumnosView: React.FC<AlumnosViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Edit Student Modal */}
+      {editingStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-md p-6 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-headline text-lg font-bold text-white">Editar Alumno</h3>
+              <button
+                onClick={() => setEditingStudent(null)}
+                className="text-[#c6c9ab] hover:text-white"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!editingStudent) return;
+                onUpdateStudent({
+                  ...editingStudent,
+                  name: editName.trim(),
+                  avatarUrl: editAvatarUrl.trim(),
+                  level: editLevel,
+                  bodyWeightKg: editBodyWeight,
+                  status: editStatus,
+                  currentProgram: editProgram.trim(),
+                });
+                setEditingStudent(null);
+              }}
+              className="space-y-4"
+            >
+              {/* Avatar preview */}
+              <div className="flex justify-center mb-2">
+                <div className="w-20 h-20 rounded-full overflow-hidden bg-[#273647] border-2 border-[#454932]">
+                  <img
+                    src={editAvatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                    alt="avatar"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                  URL del Avatar
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editAvatarUrl}
+                    onChange={(e) => setEditAvatarUrl(e.target.value)}
+                    placeholder="https://ejemplo.com/avatar.jpg"
+                    className="flex-1 bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAvatarPicker(true)}
+                    className="px-3 py-2 bg-[#273647] hover:bg-[#3a4a5e] text-[#c6c9ab] hover:text-[#d2f000] rounded-lg text-xs font-semibold transition-all shrink-0"
+                    title="Usar imagen del dataset"
+                  >
+                    Dataset
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                  Nombre Completo
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Nombre del alumno"
+                  className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                    Nivel
+                  </label>
+                  <select
+                    value={editLevel}
+                    onChange={(e) => setEditLevel(e.target.value)}
+                    className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  >
+                    <option value="Nivel Principiante">Principiante</option>
+                    <option value="Nivel Atleta Intermedio">Intermedio</option>
+                    <option value="Nivel Atleta Pro">Pro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                    Peso (kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="20"
+                    max="300"
+                    value={editBodyWeight}
+                    onChange={(e) => setEditBodyWeight(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                    Estado
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as Student['status'])}
+                    className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  >
+                    <option value="En Marcha">En Marcha</option>
+                    <option value="Revisar">Revisar</option>
+                    <option value="Inactivo">Inactivo</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#c6c9ab] uppercase mb-1">
+                    Programa Actual
+                  </label>
+                  <input
+                    type="text"
+                    value={editProgram}
+                    onChange={(e) => setEditProgram(e.target.value)}
+                    placeholder="Ej. Fuerza Inicial"
+                    className="w-full bg-[#051424] border border-[#454932] rounded-lg py-2 px-3 text-[#d4e4fa] focus:border-[#d2f000] focus:outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#d2f000] text-[#191e00] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-all"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#122131] border border-[#454932] rounded-xl w-full max-w-sm p-6 shadow-2xl animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-red-400">warning</span>
+              </div>
+              <div>
+                <h3 className="font-headline text-lg font-bold text-white">Eliminar Alumno</h3>
+                <p className="text-sm text-[#c6c9ab]">
+                  ¿Estás seguro de eliminar a <strong className="text-white">{deleteTarget.name}</strong>?
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-[#ffb4ab] mb-4 bg-red-500/10 rounded-lg p-3">
+              Esta acción eliminará al alumno y todos sus datos asociados de la nube.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm text-[#c6c9ab] hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteStudent(deleteTarget.id);
+                  setDeleteTarget(null);
+                }}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-lg transition-all"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dataset Avatar Picker */}
+      {showAvatarPicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#122131] border border-[#454932] rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl animate-scale-in flex flex-col">
+            <div className="p-4 border-b border-[#454932] flex items-center justify-between bg-[#051424] shrink-0">
+              <h3 className="font-headline text-base font-bold text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#d2f000]">photo_library</span>
+                Seleccionar Avatar del Dataset
+              </h3>
+              <button
+                onClick={() => setShowAvatarPicker(false)}
+                className="text-[#c6c9ab] hover:text-white p-1"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <p className="text-xs text-[#c6c9ab] mb-3">
+                Selecciona una imagen del catálogo de ejercicios para usar como avatar.
+              </p>
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                {(datasetExercises as any[]).map((ex: any) => {
+                  const src = ex.imageUrl;
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => {
+                        setEditAvatarUrl(ex.imageUrl);
+                        setShowAvatarPicker(false);
+                      }}
+                      className="group relative aspect-square rounded-lg overflow-hidden border border-[#454932] hover:border-[#d2f000] transition-all bg-[#051424]"
+                    >
+                      <img
+                        src={src}
+                        alt={ex.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-1">
+                        <span className="text-[10px] text-white font-semibold text-center leading-tight truncate">
+                          {ex.name}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Student Modal */}
       {isAddingModalOpen && (
