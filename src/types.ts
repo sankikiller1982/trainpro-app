@@ -23,6 +23,7 @@ export interface RoutineExercise {
   gifUrl?: string;
   sets: number;
   reps: string;
+  weight?: number;
   restTime?: string;
   notes?: string;
 }

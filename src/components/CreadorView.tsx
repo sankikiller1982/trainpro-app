@@ -172,6 +172,7 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
       routineExercises.forEach((ex, i) => {
         text += `${i + 1}. *${ex.exerciseName}* (${ex.targetMuscles})\n`;
         text += `   • Series: ${ex.sets} | Reps: ${ex.reps}`;
+        if (ex.weight) text += ` | Peso: ${ex.weight}kg`;
         if (ex.restTime) text += ` | Descanso: ${ex.restTime}`;
         text += `\n`;
         if (ex.notes) text += `   📝 ${ex.notes}\n`;
@@ -599,7 +600,7 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
 
                   {/* Inputs Section */}
                   <div className="p-3 bg-[#122131] flex flex-col gap-2">
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <div className="flex-1">
                         <label className="font-bold text-[10px] text-[#c6c9ab] uppercase tracking-wider block mb-1">
                           Series
@@ -625,6 +626,23 @@ export const CreadorView: React.FC<CreadorViewProps> = ({
                           value={item.reps}
                           onChange={(e) => handleUpdateExercise(item.id, { reps: e.target.value })}
                           className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-xl font-bold rounded focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] text-center py-1"
+                        />
+                      </div>
+
+                      <div className="flex-[0.7]">
+                        <label className="font-bold text-[10px] text-[#c6c9ab] uppercase tracking-wider block mb-1">
+                          Peso
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={item.weight ?? ''}
+                          onChange={(e) =>
+                            handleUpdateExercise(item.id, { weight: e.target.value ? parseFloat(e.target.value) : undefined })
+                          }
+                          placeholder="kg"
+                          className="w-full bg-[#051424] border border-[#454932] text-white font-headline text-sm font-bold rounded focus:border-[#d2f000] focus:ring-1 focus:ring-[#d2f000] text-center py-1.5"
                         />
                       </div>
 

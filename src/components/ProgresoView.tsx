@@ -6,6 +6,7 @@ interface ProgresoViewProps {
   selectedStudent: Student;
   onSelectStudent: (student: Student) => void;
   onCreateNewProgram: (student: Student) => void;
+  onUpdateStudent: (student: Student) => void;
   assignments?: RoutineAssignment[];
 }
 
@@ -16,10 +17,13 @@ export const ProgresoView: React.FC<ProgresoViewProps> = ({
   selectedStudent,
   onSelectStudent,
   onCreateNewProgram,
+  onUpdateStudent,
   assignments = [],
 }) => {
   const [selectedLift, setSelectedLift] = useState<LiftType>('Sentadilla');
   const [hoveredPoint, setHoveredPoint] = useState<{ index: number; val: number } | null>(null);
+  const [editingPoint, setEditingPoint] = useState<{ index: number } | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   // Filter assignments for selected student
   const studentAssignments = assignments.filter((a) => a.studentId === selectedStudent.id);
@@ -141,6 +145,7 @@ export const ProgresoView: React.FC<ProgresoViewProps> = ({
                       </div>
                       <div className="text-right shrink-0">
                         <span className="font-bold text-[#d2f000]">{ex.sets} series</span> × <span className="font-medium text-white">{ex.reps}</span>
+                        {ex.weight && <span className="text-[#c6c9ab] ml-1.5">| {ex.weight} kg</span>}
                       </div>
                     </div>
                   ))}
@@ -299,9 +304,75 @@ export const ProgresoView: React.FC<ProgresoViewProps> = ({
 
           {/* Hover Tooltip */}
           {hoveredPoint && (
-            <div className="absolute top-3 right-3 bg-[#122131] border border-[#d2f000] text-white text-xs px-3 py-1.5 rounded-lg shadow-xl z-20 font-mono">
+            <div className="absolute top-3 right-3 bg-[#122131] border border-[#d2f000] text-white text-xs px-3 py-1.5 rounded-lg shadow-xl z-20 font-mono flex items-center gap-2">
               <span className="text-[#c6c9ab]">Semana {hoveredPoint.index * 4 || 1}: </span>
               <span className="text-[#d2f000] font-bold">{hoveredPoint.val} kg</span>
+              <button
+                onClick={() => {
+                  setEditingPoint({ index: hoveredPoint.index });
+                  setEditValue(String(hoveredPoint.val));
+                }}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-[#273647] hover:bg-[#d2f000]/20 text-[#c6c9ab] hover:text-[#d2f000] transition-all"
+              >
+                editar
+              </button>
+            </div>
+          )}
+
+          {/* Edit 1RM Input */}
+          {editingPoint && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30 rounded-lg" onClick={() => setEditingPoint(null)}>
+              <div className="bg-[#122131] border border-[#d2f000] rounded-xl p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <p className="text-xs text-[#c6c9ab] mb-2 font-semibold">
+                  Editar 1RM - {selectedLift} (Semana {editingPoint.index * 4 || 1})
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    autoFocus
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="w-24 bg-[#051424] border border-[#454932] text-white text-center font-bold text-lg rounded-lg focus:border-[#d2f000] focus:outline-none py-1.5"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const newVal = parseFloat(editValue);
+                        if (!isNaN(newVal) && newVal > 0) {
+                          const updated = { ...selectedStudent };
+                          updated.oneRepMax = {
+                            ...updated.oneRepMax,
+                            [selectedLift]: updated.oneRepMax[selectedLift].map((v, i) =>
+                              i === editingPoint.index ? newVal : v
+                            ),
+                          };
+                          onUpdateStudent(updated);
+                        }
+                        setEditingPoint(null);
+                      }
+                      if (e.key === 'Escape') setEditingPoint(null);
+                    }}
+                  />
+                  <span className="text-sm text-[#c6c9ab] self-center">kg</span>
+                </div>
+                <div className="flex justify-end gap-2 mt-3">
+                  <button onClick={() => setEditingPoint(null)} className="text-[10px] text-[#c6c9ab] hover:text-white px-2 py-1">Cancelar</button>
+                  <button onClick={() => {
+                    const newVal = parseFloat(editValue);
+                    if (!isNaN(newVal) && newVal > 0) {
+                      const updated = { ...selectedStudent };
+                      updated.oneRepMax = {
+                        ...updated.oneRepMax,
+                        [selectedLift]: updated.oneRepMax[selectedLift].map((v, i) =>
+                          i === editingPoint.index ? newVal : v
+                        ),
+                      };
+                      onUpdateStudent(updated);
+                    }
+                    setEditingPoint(null);
+                  }} className="text-[10px] bg-[#d2f000] text-[#191e00] font-bold px-3 py-1 rounded-lg">Guardar</button>
+                </div>
+              </div>
             </div>
           )}
 

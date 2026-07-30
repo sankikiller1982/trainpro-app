@@ -282,6 +282,7 @@ function AppContent() {
             selectedStudent={selectedStudent}
             onSelectStudent={setSelectedStudent}
             onCreateNewProgram={handleCreateNewProgram}
+            onUpdateStudent={handleUpdateStudent}
             assignments={assignments}
           />
         )}
