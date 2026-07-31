@@ -2,7 +2,7 @@
 export const SPREADSHEET_ID = '1l8tBDWLINx_Ui_6fKfm5cZAhIDe7E4I79ZBIjj1X86Y';
 export const API_URL = 'https://script.google.com/macros/s/AKfycbwiquZtw1lx0Qt3jYNqNaaiPx-O7xsnDG2os97hg711Ar392UMS2ePdQH71uLdAr2z4ww/exec';
 
-export type RecordType = 'student' | 'exercise' | 'routine' | 'saved_routine' | 'assignment';
+export type RecordType = 'student' | 'exercise' | 'routine' | 'saved_routine' | 'assignment' | 'deleted_exercises';
 
 export const sheetsApi = {
   _trainer: '',

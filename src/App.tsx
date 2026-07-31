@@ -29,6 +29,7 @@ function AppContent() {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [deletedExerciseIds, setDeletedExerciseIds] = useState<string[]>([]);
   const [savedRoutines, setSavedRoutines] = useState<SavedRoutine[]>([]);
   const [assignments, setAssignments] = useState<RoutineAssignment[]>([]);
   
@@ -70,6 +71,8 @@ function AppContent() {
         const loadedExercises = db.filter((r: any) => r.type === 'exercise').map(parseData).filter(Boolean) as Exercise[];
         const loadedRoutines = db.filter((r: any) => r.type === 'saved_routine').map(parseData).filter(Boolean) as SavedRoutine[];
         const loadedAssignments = db.filter((r: any) => r.type === 'assignment').map(parseData).filter(Boolean) as RoutineAssignment[];
+        const deletedRecord = db.find((r: any) => r.type === 'deleted_exercises');
+        const loadedDeletedIds: string[] = deletedRecord?.data?.ids ?? [];
 
         // Estudiantes
         if (loadedStudents.length > 0) {
@@ -82,13 +85,21 @@ function AppContent() {
 
         // Combinar ejercicios iniciales + dataset completo + custom creados
         const baseCombined = getInitialExercisesCombined();
+        let finalExercises: Exercise[];
         if (loadedExercises.length > 0) {
           // Agregar custom exercises subidos previamente por el usuario, evitando duplicados
           const customOnly = loadedExercises.filter((e) => !baseCombined.some((b) => b.id === e.id || b.name.toLowerCase() === e.name.toLowerCase()));
-          setExercises([...customOnly, ...baseCombined]);
+          finalExercises = [...customOnly, ...baseCombined];
         } else {
-          setExercises(baseCombined);
+          finalExercises = baseCombined;
         }
+        // Ocultar ejercicios eliminados por el usuario
+        setDeletedExerciseIds(loadedDeletedIds);
+        if (loadedDeletedIds.length > 0) {
+          const deletedSet = new Set(loadedDeletedIds);
+          finalExercises = finalExercises.filter((e) => !deletedSet.has(e.id));
+        }
+        setExercises(finalExercises);
 
         // Rutinas Guardadas y Asignaciones
         if (loadedRoutines.length > 0) {
@@ -228,7 +239,16 @@ function AppContent() {
   const handleDeleteExercise = useCallback((exercise: Exercise) => {
     setExercises((prev) => prev.filter((e) => e.id !== exercise.id));
     addToast(`Ejercicio "${exercise.name}" eliminado del catálogo`, 'info');
-    sheetsApi.deleteRecord(exercise.id, 'exercise').catch(console.error);
+    // Si es un ejercicio custom, borrar su registro de la nube
+    if (exercise.id.startsWith('ex-custom-')) {
+      sheetsApi.deleteRecord(exercise.id, 'exercise').catch(console.error);
+    }
+    // Persistir el ID eliminado para no volver a mostrarlo al recargar
+    setDeletedExerciseIds((prev) => {
+      const next = prev.includes(exercise.id) ? prev : [...prev, exercise.id];
+      sheetsApi.saveRecord('deleted-exercise-ids', 'deleted_exercises', { ids: next }).catch(console.error);
+      return next;
+    });
   }, [addToast]);
 
   const handleAddExerciseToRoutineFromCatalog = useCallback((exercise: Exercise) => {
