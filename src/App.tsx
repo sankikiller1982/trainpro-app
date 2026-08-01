@@ -72,7 +72,8 @@ function AppContent() {
         const loadedRoutines = db.filter((r: any) => r.type === 'saved_routine').map(parseData).filter(Boolean) as SavedRoutine[];
         const loadedAssignments = db.filter((r: any) => r.type === 'assignment').map(parseData).filter(Boolean) as RoutineAssignment[];
         const deletedRecord = db.find((r: any) => r.type === 'deleted_exercises');
-        const loadedDeletedIds: string[] = deletedRecord?.data?.ids ?? [];
+        const deletedParsed = deletedRecord ? (parseData(deletedRecord) as { ids?: string[] } | null) : null;
+        const loadedDeletedIds: string[] = deletedParsed?.ids ?? [];
 
         // Estudiantes
         if (loadedStudents.length > 0) {
@@ -243,13 +244,17 @@ function AppContent() {
     if (exercise.id.startsWith('ex-custom-')) {
       sheetsApi.deleteRecord(exercise.id, 'exercise').catch(console.error);
     }
-    // Persistir el ID eliminado para no volver a mostrarlo al recargar
-    setDeletedExerciseIds((prev) => {
-      const next = prev.includes(exercise.id) ? prev : [...prev, exercise.id];
-      sheetsApi.saveRecord('deleted-exercise-ids', 'deleted_exercises', { ids: next }).catch(console.error);
-      return next;
-    });
+    // Acumular el ID eliminado en el estado (se persiste en useEffect)
+    setDeletedExerciseIds((prev) =>
+      prev.includes(exercise.id) ? prev : [...prev, exercise.id]
+    );
   }, [addToast]);
+
+  // Persistir la lista de ejercicios eliminados cada vez que cambia
+  useEffect(() => {
+    if (deletedExerciseIds.length === 0) return;
+    sheetsApi.saveRecord('deleted-exercise-ids', 'deleted_exercises', { ids: deletedExerciseIds }).catch(console.error);
+  }, [deletedExerciseIds]);
 
   const handleAddExerciseToRoutineFromCatalog = useCallback((exercise: Exercise) => {
     // Si la función global existe (en modo Editor de CreadorView), invocarla
